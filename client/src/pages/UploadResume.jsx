@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { Upload, FileText, Briefcase, Sparkles, CheckCircle2, ArrowRight, X } from 'lucide-react';
+import { Upload, FileText, Briefcase, Sparkles, CheckCircle2, ArrowRight, X, AlertCircle } from 'lucide-react';
 
 function UploadResume() {
   const [resume, setResume] = useState(null);
@@ -13,10 +13,11 @@ function UploadResume() {
   const [currentUser, setCurrentUser] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [dragActiveJd, setDragActiveJd] = useState(false);
+  const [error, setError] = useState(null);
 
   const navigate = useNavigate();
 
-  /* ================= AUTH LOGIC (UNCHANGED) ================= */
+  /* ================= AUTH LOGIC ================= */
   useEffect(() => {
     const auth = getAuth();
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -25,13 +26,85 @@ function UploadResume() {
     return () => unsub();
   }, []);
 
-  /* ================= CORE LOGIC (UNCHANGED) ================= */
+  /* ================= ERROR MODAL ================= */
+  const ErrorModal = ({ message, onClose }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative animate-fade-in">
+        <div className="flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+            <AlertCircle className="w-6 h-6 text-red-600" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Upload Error</h3>
+            <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">
+              {message}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="mt-6 w-full bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg py-3 px-4 font-semibold hover:from-red-700 hover:to-red-800 transition-all"
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ================= VALIDATION HELPERS ================= */
+  const validateJobDescription = (text) => {
+    const trimmed = text.trim();
+    
+    if (!trimmed) {
+      return { valid: false, message: "Job description cannot be empty." };
+    }
+    
+    if (trimmed.length < 100) {
+      return { 
+        valid: false, 
+        message: "Job description is too short. Please paste the complete job posting with responsibilities, requirements, and qualifications (minimum 100 characters)." 
+      };
+    }
+    
+    // Check if it's just whitespace or meaningless characters
+    const meaningfulChars = trimmed.replace(/[\s\n\r\t]/g, '').length;
+    if (meaningfulChars < 50) {
+      return { 
+        valid: false, 
+        message: "Job description doesn't contain enough meaningful content. Please paste the actual job posting." 
+      };
+    }
+    
+    return { valid: true };
+  };
+
+  /* ================= CORE UPLOAD LOGIC ================= */
   const handleAnalyze = useCallback(async () => {
-    if (!resume || (!(jobDesc.trim()) && !jdFile)) {
-      alert('❗ Please upload a resume and provide a job description.');
+    // Clear previous errors
+    setError(null);
+
+    // Validate resume
+    if (!resume) {
+      setError('Please upload your resume first.');
       return;
     }
 
+    // Validate job description (text or file)
+    if (!jdFile && !jobDesc.trim()) {
+      setError('Please provide a job description (paste text or upload file).');
+      return;
+    }
+
+    // Validate job description text if provided
+    if (!jdFile && jobDesc.trim()) {
+      const jdValidation = validateJobDescription(jobDesc);
+      if (!jdValidation.valid) {
+        setError(jdValidation.message);
+        return;
+      }
+    }
+
+    // Check authentication
     if (!currentUser) {
       navigate('/login', {
         state: { from: '/upload', pendingRedirect: true },
@@ -56,7 +129,7 @@ function UploadResume() {
       }
 
       const response = await axios.post(
-        'http://127.0.0.1:5000/upload',
+        '/api/upload',
         formData,
         {
           headers: {
@@ -66,42 +139,67 @@ function UploadResume() {
       );
 
       const data = response.data;
-      console.log('Backend response:', data);
 
       if (!data.valid || !data.doc_id) {
-        alert(data.message || '❌ Upload failed.');
+        setError(data.message || 'Upload failed. Please try again.');
         return;
       }
 
+      // Success - navigate to results
       navigate(`/resultpage/${data.doc_id}`);
-    } catch (error) {
-      console.error('❌ Upload failed:', error);
-      alert('Something went wrong during upload. Please try again.');
+      
+    } catch (err) {
+      console.error('❌ Upload error:', err);
+      
+      // Handle different error scenarios
+      if (err.response?.data?.message) {
+        // Backend returned a specific error message
+        setError(err.response.data.message);
+      } else if (err.response?.status === 400) {
+        setError('Invalid file or data. Please check your files and try again.');
+      } else if (err.response?.status === 401) {
+        setError('Authentication failed. Please log in again.');
+        setTimeout(() => navigate('/login'), 2000);
+      } else if (err.code === 'ERR_NETWORK') {
+        setError('Network error. Please check your internet connection and try again.');
+      } else {
+        setError('Something went wrong. Please try again or contact support if the issue persists.');
+      }
     } finally {
       setLoading(false);
     }
   }, [resume, jobDesc, jdFile, currentUser, navigate]);
 
-  /* ================= UI HANDLERS (UNCHANGED) ================= */
+  /* ================= FILE UPLOAD HANDLERS ================= */
   const handleResumeUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    // Clear previous errors
+    setError(null);
 
     const allowedExtensions = ['pdf', 'docx'];
     const ext = file.name.split('.').pop().toLowerCase();
 
     if (!allowedExtensions.includes(ext)) {
-      alert('❌ Invalid file. Only PDF and DOCX are allowed.');
+      setError('Invalid resume format. Only PDF and DOCX files are allowed.');
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      alert('❌ Resume file exceeds 10MB limit.');
+      setError('Resume file is too large. Maximum size is 10MB.\n\nTip: Try compressing your PDF or removing unnecessary images.');
       return;
     }
 
+    // Check for minimum file size (likely empty)
+    if (file.size < 1024) {
+      setError('Resume file is too small or empty. Please upload a valid resume.');
+      return;
+    }
+
+    // Check if same as JD
     if (jdFile && jdFile.name === file.name && jdFile.size === file.size) {
-      alert('❌ Resume and Job Description cannot be the same file.');
+      setError('Resume and Job Description cannot be the same file. Please upload different files.');
       return;
     }
 
@@ -113,31 +211,44 @@ function UploadResume() {
     const file = e.target.files[0];
     if (!file) return;
 
-    const allowedExtensions = ['pdf', 'docx'];
+    // Clear previous errors
+    setError(null);
+
+    const allowedExtensions = ['pdf', 'docx', 'txt'];
     const ext = file.name.split('.').pop().toLowerCase();
 
     if (!allowedExtensions.includes(ext)) {
-      alert('❌ Invalid JD file. Only PDF and DOCX are allowed.');
+      setError('Invalid JD format. Only PDF, DOCX, and TXT files are allowed.');
       return;
     }
 
     if (file.size > 15 * 1024 * 1024) {
-      alert('❌ JD file exceeds 15MB limit.');
+      setError('Job Description file is too large. Maximum size is 15MB.');
       return;
     }
 
+    // Check for minimum file size
+    if (file.size < 100) {
+      setError('Job Description file is too small or empty. Please upload a valid job posting.');
+      return;
+    }
+
+    // Check if same as resume
     if (resume && resume.name === file.name && resume.size === file.size) {
-      alert('❌ Resume and Job Description cannot be the same file.');
+      setError('Resume and Job Description cannot be the same file. Please upload different files.');
       return;
     }
 
     setJdFile(file);
-    setJobDesc('');
+    setJobDesc(''); // Clear text input when file is uploaded
   };
 
   const handleJobDescChange = (e) => {
     setJobDesc(e.target.value);
-    setJdFile(null);
+    if (e.target.value.trim()) {
+      setJdFile(null); // Clear file when text is entered
+    }
+    setError(null); // Clear errors when typing
   };
 
   /* ================= DRAG & DROP HANDLERS ================= */
@@ -162,9 +273,12 @@ function UploadResume() {
     }
   };
 
-  /* ================= PROFESSIONAL UI ================= */
+  /* ================= UI RENDER ================= */
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
+      {/* Error Modal */}
+      {error && <ErrorModal message={error} onClose={() => setError(null)} />}
+
       <div className="container mx-auto px-4 py-8 max-w-5xl">
         
         {/* Header */}
@@ -314,9 +428,19 @@ function UploadResume() {
               value={jobDesc}
               onChange={handleJobDescChange}
               disabled={step < 2}
-              placeholder="Paste the complete job description here including responsibilities, requirements, and qualifications..."
+              placeholder="Paste the complete job description here including responsibilities, requirements, and qualifications... (minimum 100 characters)"
               className="w-full bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-cyan-500 focus:bg-white transition-all resize-none disabled:cursor-not-allowed"
             />
+            
+            {/* Character count */}
+            {jobDesc.trim().length > 0 && (
+              <p className={`text-xs mt-1 ${
+                jobDesc.trim().length >= 100 ? 'text-green-600' : 'text-orange-600'
+              }`}>
+                {jobDesc.trim().length} / 100 characters minimum
+                {jobDesc.trim().length < 100 && ` (${100 - jobDesc.trim().length} more needed)`}
+              </p>
+            )}
 
             {/* OR Divider */}
             <div className="relative my-6">
@@ -346,7 +470,7 @@ function UploadResume() {
             >
               <input
                 type="file"
-                accept=".pdf,.docx"
+                accept=".pdf,.docx,.txt"
                 onChange={handleJdFileUpload}
                 disabled={step < 2}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -378,7 +502,7 @@ function UploadResume() {
                   <Upload className="w-6 h-6 text-cyan-600" />
                   <div>
                     <p className="text-gray-900 font-medium text-sm">
-                      Upload JD file (PDF or DOCX)
+                      Upload JD file (PDF, DOCX, or TXT)
                     </p>
                     <p className="text-xs text-gray-400">
                       Maximum 15MB

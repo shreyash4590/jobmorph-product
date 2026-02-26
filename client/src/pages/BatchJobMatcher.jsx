@@ -132,7 +132,7 @@ function BatchJobMatcher() {
 
       // 🔥 FIX: Use axios same way as UploadResume.jsx
       const response = await axios.post(
-        'http://127.0.0.1:5000/batch/analyze',
+        '/api/batch/analyze',
         formData,
         {
           headers: {

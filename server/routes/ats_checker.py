@@ -5,10 +5,11 @@ from flask import Blueprint, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from utils.ats_checker import detect_ats_issues, auto_fix_resume, get_before_after_comparison
 from utils.preview_generator import generate_resume_preview_with_highlights
+from utils.extract_text import ScannedPDFError
 
 ats_blueprint = Blueprint('ats', __name__)
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+UPLOAD_FOLDER = "/tmp"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc'}
@@ -21,7 +22,7 @@ def allowed_file(filename):
 # 1. CHECK ATS ISSUES
 # ======================================================
 
-@ats_blueprint.route("/api/ats/check", methods=["POST", "OPTIONS"])
+@ats_blueprint.route("/ats/check", methods=["POST", "OPTIONS"])
 def check_ats():
     """
     Analyze uploaded resume for ATS issues.
@@ -51,8 +52,18 @@ def check_ats():
         
         print(f"📄 Checking ATS compatibility: {filename}")
         
-        # Analyze file
-        result = detect_ats_issues(filepath)
+        # Analyze file - this will catch scanned PDFs
+        try:
+            result = detect_ats_issues(filepath)
+        except ScannedPDFError as e:
+            return jsonify({
+                "error": str(e),
+                "is_scanned_pdf": True
+            }), 400
+        except (ValueError, RuntimeError) as e:
+            return jsonify({
+                "error": str(e)
+            }), 400
         
         # Store filepath and original extension
         result['temp_file'] = filename
@@ -68,14 +79,14 @@ def check_ats():
         print(f"❌ ATS check error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred. Please try again."}), 500
 
 
 # ======================================================
-# 2. GENERATE PREVIEW WITH HIGHLIGHTS (NEW!)
+# 2. GENERATE PREVIEW WITH HIGHLIGHTS
 # ======================================================
 
-@ats_blueprint.route("/api/ats/preview", methods=["POST", "OPTIONS"])
+@ats_blueprint.route("/ats/preview", methods=["POST", "OPTIONS"])
 def generate_preview():
     """
     Generate visual preview of resume with highlighted issues.
@@ -103,15 +114,29 @@ def generate_preview():
         print(f"🖼️ Generating preview with highlights: {filename}")
         
         # Get issues for this file
-        issues_result = detect_ats_issues(filepath)
-        issues = issues_result.get('issues', [])
+        try:
+            issues_result = detect_ats_issues(filepath)
+            issues = issues_result.get('issues', [])
+        except ScannedPDFError as e:
+            return jsonify({
+                "error": str(e),
+                "is_scanned_pdf": True
+            }), 400
+        except Exception as e:
+            return jsonify({
+                "error": "Could not analyze file for preview"
+            }), 400
         
         # Generate preview images with highlights
-        preview_images = generate_resume_preview_with_highlights(filepath, issues)
+        try:
+            preview_images = generate_resume_preview_with_highlights(filepath, issues)
+        except Exception as e:
+            print(f"Preview generation failed: {e}")
+            preview_images = None
         
         if not preview_images:
             return jsonify({
-                "error": "Could not generate preview. File may be corrupted or unsupported."
+                "error": "Could not generate preview. File may be scanned, corrupted, or unsupported."
             }), 500
         
         print(f"✅ Generated {len(preview_images)} page(s) with highlights")
@@ -126,14 +151,14 @@ def generate_preview():
         print(f"❌ Preview generation error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "Preview generation failed"}), 500
 
 
 # ======================================================
 # 3. AUTO-FIX AND DOWNLOAD
 # ======================================================
 
-@ats_blueprint.route("/api/ats/fix", methods=["POST", "OPTIONS"])
+@ats_blueprint.route("/ats/fix", methods=["POST", "OPTIONS"])
 def fix_and_download():
     """
     Auto-fix ATS issues and return fixed file IN ORIGINAL FORMAT.
@@ -166,7 +191,18 @@ def fix_and_download():
         fixed_filename = f"{base_name}_ATS_Optimized{original_ext}"
         fixed_path = os.path.join(UPLOAD_FOLDER, fixed_filename)
         
-        auto_fix_resume(original_path, fixed_path)
+        try:
+            auto_fix_resume(original_path, fixed_path)
+        except ScannedPDFError as e:
+            return jsonify({
+                "error": str(e),
+                "is_scanned_pdf": True
+            }), 400
+        except Exception as e:
+            print(f"Auto-fix failed: {e}")
+            return jsonify({
+                "error": "Unable to fix resume. Please ensure it's a valid text-based PDF or DOCX file."
+            }), 500
         
         print(f"✅ Fixed resume ready: {fixed_filename}")
         
@@ -186,14 +222,14 @@ def fix_and_download():
         print(f"❌ Auto-fix error: {e}")
         import traceback
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "An unexpected error occurred"}), 500
 
 
 # ======================================================
 # 4. GET BEFORE/AFTER COMPARISON
 # ======================================================
 
-@ats_blueprint.route("/api/ats/compare", methods=["POST", "OPTIONS"])
+@ats_blueprint.route("/ats/compare", methods=["POST", "OPTIONS"])
 def compare_versions():
     """
     Compare original vs fixed resume.
@@ -229,7 +265,7 @@ def compare_versions():
 # 5. CLEANUP OLD FILES
 # ======================================================
 
-@ats_blueprint.route("/api/ats/cleanup", methods=["POST", "OPTIONS"])
+@ats_blueprint.route("/ats/cleanup", methods=["POST", "OPTIONS"])
 def cleanup_files():
     """Remove temporary files older than 1 hour"""
     
@@ -269,16 +305,23 @@ def cleanup_files():
 
 
 
+
+
+
+
+
+
 # # server/routes/ats_checker.py
 
 # import os
 # from flask import Blueprint, request, jsonify, send_file
 # from werkzeug.utils import secure_filename
 # from utils.ats_checker import detect_ats_issues, auto_fix_resume, get_before_after_comparison
+# from utils.preview_generator import generate_resume_preview_with_highlights
 
 # ats_blueprint = Blueprint('ats', __name__)
 
-# UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
+# UPLOAD_FOLDER = "/tmp"
 # os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # ALLOWED_EXTENSIONS = {'pdf', 'docx', 'doc'}
@@ -291,7 +334,7 @@ def cleanup_files():
 # # 1. CHECK ATS ISSUES
 # # ======================================================
 
-# @ats_blueprint.route("/api/ats/check", methods=["POST", "OPTIONS"])
+# @ats_blueprint.route("/ats/check", methods=["POST", "OPTIONS"])
 # def check_ats():
 #     """
 #     Analyze uploaded resume for ATS issues.
@@ -304,7 +347,6 @@ def cleanup_files():
 #         return '', 204
     
 #     try:
-#         # Validate file upload
 #         if 'resume' not in request.files:
 #             return jsonify({"error": "No resume file provided"}), 400
         
@@ -316,7 +358,6 @@ def cleanup_files():
 #         if not allowed_file(file.filename):
 #             return jsonify({"error": "Invalid file type. Only PDF and DOCX allowed."}), 400
         
-#         # Save file
 #         filename = secure_filename(file.filename)
 #         filepath = os.path.join(UPLOAD_FOLDER, filename)
 #         file.save(filepath)
@@ -326,33 +367,89 @@ def cleanup_files():
 #         # Analyze file
 #         result = detect_ats_issues(filepath)
         
-#         # Store filepath and original extension for later fix operation
+#         # Store filepath and original extension
 #         result['temp_file'] = filename
 #         result['original_extension'] = os.path.splitext(filename)[1].lower()
         
 #         print(f"✅ ATS Score: {result['score']}/100")
 #         print(f"   Issues: {len(result['issues'])}")
 #         print(f"   Warnings: {len(result['warnings'])}")
-#         print(f"   Format: {result['original_extension']}")
         
 #         return jsonify(result), 200
         
 #     except Exception as e:
 #         print(f"❌ ATS check error: {e}")
+#         import traceback
+#         traceback.print_exc()
 #         return jsonify({"error": str(e)}), 500
 
 
 # # ======================================================
-# # 2. AUTO-FIX AND DOWNLOAD (MAINTAINS ORIGINAL FORMAT!)
+# # 2. GENERATE PREVIEW WITH HIGHLIGHTS (NEW!)
 # # ======================================================
 
-# @ats_blueprint.route("/api/ats/fix", methods=["POST", "OPTIONS"])
+# @ats_blueprint.route("/ats/preview", methods=["POST", "OPTIONS"])
+# def generate_preview():
+#     """
+#     Generate visual preview of resume with highlighted issues.
+    
+#     Request: JSON with { "filename": "resume.pdf" }
+#     Response: JSON with base64 encoded images showing highlights
+#     """
+    
+#     if request.method == "OPTIONS":
+#         return '', 204
+    
+#     try:
+#         data = request.get_json()
+#         filename = data.get('filename')
+        
+#         if not filename:
+#             return jsonify({"error": "Filename required"}), 400
+        
+#         filename = secure_filename(filename)
+#         filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+#         if not os.path.exists(filepath):
+#             return jsonify({"error": "File not found"}), 404
+        
+#         print(f"🖼️ Generating preview with highlights: {filename}")
+        
+#         # Get issues for this file
+#         issues_result = detect_ats_issues(filepath)
+#         issues = issues_result.get('issues', [])
+        
+#         # Generate preview images with highlights
+#         preview_images = generate_resume_preview_with_highlights(filepath, issues)
+        
+#         if not preview_images:
+#             return jsonify({
+#                 "error": "Could not generate preview. File may be corrupted or unsupported."
+#             }), 500
+        
+#         print(f"✅ Generated {len(preview_images)} page(s) with highlights")
+        
+#         return jsonify({
+#             "success": True,
+#             "pages": preview_images,
+#             "total_pages": len(preview_images)
+#         }), 200
+        
+#     except Exception as e:
+#         print(f"❌ Preview generation error: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
+
+# # ======================================================
+# # 3. AUTO-FIX AND DOWNLOAD
+# # ======================================================
+
+# @ats_blueprint.route("/ats/fix", methods=["POST", "OPTIONS"])
 # def fix_and_download():
 #     """
 #     Auto-fix ATS issues and return fixed file IN ORIGINAL FORMAT.
-    
-#     PDF → Fixed PDF
-#     DOCX → Fixed DOCX
     
 #     Request: JSON with { "filename": "original_file.pdf" }
 #     Response: Fixed file download (SAME FORMAT as uploaded)
@@ -368,35 +465,29 @@ def cleanup_files():
 #         if not filename:
 #             return jsonify({"error": "Filename required"}), 400
         
-#         # Security: prevent path traversal
 #         filename = secure_filename(filename)
 #         original_path = os.path.join(UPLOAD_FOLDER, filename)
         
 #         if not os.path.exists(original_path):
 #             return jsonify({"error": "Original file not found"}), 404
         
-#         # Get original extension
 #         base_name, original_ext = os.path.splitext(filename)
 #         original_ext = original_ext.lower()
         
 #         print(f"🔧 Auto-fixing resume: {filename} (format: {original_ext})")
         
-#         # Generate fixed filename with SAME extension
 #         fixed_filename = f"{base_name}_ATS_Optimized{original_ext}"
 #         fixed_path = os.path.join(UPLOAD_FOLDER, fixed_filename)
         
-#         # Fix issues - maintains original format!
 #         auto_fix_resume(original_path, fixed_path)
         
 #         print(f"✅ Fixed resume ready: {fixed_filename}")
         
-#         # Determine MIME type based on extension
 #         if original_ext == '.pdf':
 #             mimetype = 'application/pdf'
-#         else:  # .docx or .doc
+#         else:
 #             mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         
-#         # Return file for download
 #         return send_file(
 #             fixed_path,
 #             mimetype=mimetype,
@@ -412,16 +503,13 @@ def cleanup_files():
 
 
 # # ======================================================
-# # 3. GET BEFORE/AFTER COMPARISON
+# # 4. GET BEFORE/AFTER COMPARISON
 # # ======================================================
 
-# @ats_blueprint.route("/api/ats/compare", methods=["POST", "OPTIONS"])
+# @ats_blueprint.route("/ats/compare", methods=["POST", "OPTIONS"])
 # def compare_versions():
 #     """
 #     Compare original vs fixed resume.
-    
-#     Request: JSON with { "original": "file.pdf", "fixed": "file_fixed.pdf" }
-#     Response: JSON with comparison data
 #     """
     
 #     if request.method == "OPTIONS":
@@ -441,7 +529,6 @@ def cleanup_files():
 #         if not os.path.exists(original_path) or not os.path.exists(fixed_path):
 #             return jsonify({"error": "Files not found"}), 404
         
-#         # Generate comparison
 #         comparison = get_before_after_comparison(original_path, fixed_path)
         
 #         return jsonify(comparison), 200
@@ -452,10 +539,10 @@ def cleanup_files():
 
 
 # # ======================================================
-# # 4. CLEANUP OLD FILES (OPTIONAL)
+# # 5. CLEANUP OLD FILES
 # # ======================================================
 
-# @ats_blueprint.route("/api/ats/cleanup", methods=["POST", "OPTIONS"])
+# @ats_blueprint.route("/ats/cleanup", methods=["POST", "OPTIONS"])
 # def cleanup_files():
 #     """Remove temporary files older than 1 hour"""
     
@@ -471,9 +558,8 @@ def cleanup_files():
 #         for filename in os.listdir(UPLOAD_FOLDER):
 #             filepath = os.path.join(UPLOAD_FOLDER, filename)
             
-#             # Remove files older than 1 hour
 #             if os.path.isfile(filepath):
-#                 if now - os.path.getmtime(filepath) > 3600:  # 1 hour
+#                 if now - os.path.getmtime(filepath) > 3600:
 #                     os.remove(filepath)
 #                     removed += 1
         
@@ -485,3 +571,14 @@ def cleanup_files():
 #     except Exception as e:
 #         print(f"❌ Cleanup error: {e}")
 #         return jsonify({"error": str(e)}), 500
+
+
+
+
+
+
+
+
+
+
+

@@ -132,10 +132,18 @@ function Dashboard() {
     );
   }, [selectedRange, scoreHistory]);
 
+  // Updated function with dynamic colors based on score
   const getPieData = (score) => [
     { name: 'Matched', value: Math.min(score, 100) },
     { name: 'Gap', value: Math.max(0, 100 - score) }
   ];
+
+  // Get pie chart color based on score
+  const getScoreColor = (score) => {
+    if (score >= 75) return '#10b981'; // Green for >= 75
+    if (score >= 45) return '#f59e0b'; // Orange for 45-74
+    return '#ef4444'; // Red for < 45
+  };
 
   const getBestMatch = () => {
     if (!filteredHistory.length) return null;
@@ -171,6 +179,13 @@ function Dashboard() {
     if (score >= 75) return { text: 'Good Match', color: 'bg-blue-500', emoji: '👍' };
     if (score >= 60) return { text: 'Fair Match', color: 'bg-yellow-500', emoji: '📝' };
     return { text: 'Needs Work', color: 'bg-red-500', emoji: '💪' };
+  };
+
+  // Get text color class based on score
+  const getScoreTextColor = (score) => {
+    if (score >= 75) return 'text-green-600';
+    if (score >= 45) return 'text-orange-600';
+    return 'text-red-600';
   };
 
   const bg = darkMode ? 'bg-gray-900' : 'bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50';
@@ -271,7 +286,7 @@ function Dashboard() {
         {/* Latest & Best Match - Side by Side */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
 
-          {/* Latest Match */}
+          {/* Latest Match - WITH DYNAMIC SCORE COLORS */}
           <div className={`${cardBg} rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg border ${borderColor}`}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-2">
               <h2 className={`text-lg sm:text-xl font-bold ${textPrimary}`}>🎯 Latest Match</h2>
@@ -298,7 +313,8 @@ function Dashboard() {
                         dataKey="value"
                         stroke="none"
                       >
-                        <Cell fill="#10b981" />
+                        {/* Dynamic color based on score */}
+                        <Cell fill={getScoreColor(latestGemini.score)} />
                         <Cell fill={darkMode ? '#374151' : '#e5e7eb'} />
                       </Pie>
                       <Tooltip />
@@ -306,7 +322,8 @@ function Dashboard() {
                   </ResponsiveContainer>
 
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className={`text-3xl sm:text-4xl font-bold ${textPrimary}`}>
+                    {/* Dynamic text color based on score */}
+                    <span className={`text-3xl sm:text-4xl font-bold ${getScoreTextColor(latestGemini.score)}`}>
                       {latestGemini.score}%
                     </span>
                     <span className={`text-xs sm:text-sm ${textSecondary}`}>Match Rate</span>

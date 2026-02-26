@@ -34,7 +34,7 @@ export default function ATSChecker() {
     formData.append('resume', file);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/ats/check', {
+      const response = await fetch('/api/ats/check', {
         method: 'POST',
         body: formData
       });
@@ -68,7 +68,7 @@ export default function ATSChecker() {
     console.log('🖼️ Requesting preview for:', filename);
     
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/ats/preview', {
+      const response = await fetch('/api/ats/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename })
@@ -98,7 +98,7 @@ export default function ATSChecker() {
     setFixing(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/ats/fix', {
+      const response = await fetch('/api/ats/fix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: result.temp_file })

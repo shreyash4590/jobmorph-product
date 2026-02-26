@@ -100,9 +100,8 @@ const InterviewPrep = () => {
       setJobRole(extractedRole);
 
       const token = await user.getIdToken(true);
-      const apiUrl = process.env.REACT_APP_API_URL || "http://127.0.0.1:5000";
 
-      const res = await fetch(`${apiUrl}/interview-prep`, {
+      const res = await fetch('/api/interview-prep', {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,

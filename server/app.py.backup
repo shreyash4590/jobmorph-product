@@ -43,8 +43,8 @@ app = Flask(__name__, static_folder='../client/build', static_url_path='')
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://resumeapp-482804.uc.r.appspot.com",
-    "https://resumeapp-482804.appspot.com"
+    "https://jobmorph-production.uc.r.appspot.com",
+    "https://jobmorph-production.appspot.com"
 ]
 
 CORS(
@@ -67,23 +67,31 @@ def after_request(response):
     return response
 
 # --------------------------------------------------
-# 🔹 Register Blueprints FIRST (BEFORE catch-all route)
+# 🎨 Serve React App (for production)
+# --------------------------------------------------
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    """Serve React app for all non-API routes"""
+    # If path exists as a file, serve it
+    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    # Otherwise serve index.html (for React Router)
+    else:
+        return send_from_directory(app.static_folder, 'index.html')
+
+# --------------------------------------------------
+# 🔹 Register Blueprints
 # --------------------------------------------------
 from routes.upload import upload_blueprint
 from routes.interview_prep import interview_blueprint
 from routes.ats_checker import ats_blueprint
 from routes.batch_matcher import batch_blueprint
 
-app.register_blueprint(upload_blueprint, url_prefix='/api')
-app.register_blueprint(interview_blueprint, url_prefix='/api')
-app.register_blueprint(ats_blueprint, url_prefix='/api')
-app.register_blueprint(batch_blueprint, url_prefix='/api')
-
-
-# app.register_blueprint(upload_blueprint)
-# app.register_blueprint(interview_blueprint)
-# app.register_blueprint(ats_blueprint)
-# app.register_blueprint(batch_blueprint)
+app.register_blueprint(upload_blueprint)
+app.register_blueprint(interview_blueprint)
+app.register_blueprint(ats_blueprint)
+app.register_blueprint(batch_blueprint)
 
 # --------------------------------------------------
 # 🔐 Admin Password Reset
@@ -130,30 +138,8 @@ def health():
         "company_research": True,
         "ats_checker": True,
         "gemini_configured": bool(gemini_key),
-        "environment": os.getenv("FLASK_ENV", "development"),
-        "static_folder": app.static_folder,
-        "static_folder_exists": os.path.exists(app.static_folder) if app.static_folder else False
+        "environment": os.getenv("FLASK_ENV", "development")
     }), 200
-
-# --------------------------------------------------
-# 🎨 Serve React App - MUST BE LAST (catch-all route)
-# --------------------------------------------------
-@app.route("/", defaults={"path": ""})
-@app.route("/<path:path>")
-def serve_react(path):
-    # ❌ Never touch API routes
-    if path.startswith("api"):
-        return jsonify({"error": "API route not found"}), 404
-
-    static_path = os.path.join(app.static_folder, path)
-
-    # Serve static files if they exist
-    if path != "" and os.path.exists(static_path):
-        return send_from_directory(app.static_folder, path)
-
-    # Otherwise serve React SPA
-    return send_from_directory(app.static_folder, "index.html")
-
 
 # --------------------------------------------------
 # ▶ Run Server - UPDATED for GCP
@@ -174,8 +160,6 @@ if __name__ == "__main__":
         print("⚠️  GEMINI_API_KEY: NOT FOUND!")
     
     print(f"📍 Server: http://0.0.0.0:{port}")
-    print(f"📁 Static folder: {app.static_folder}")
-    print(f"📂 Static folder exists: {os.path.exists(app.static_folder) if app.static_folder else False}")
     print("✅ Features: Resume Analysis, Interview Prep, ATS Checker")
     print("=" * 60)
     
@@ -201,8 +185,6 @@ if __name__ == "__main__":
 
 
 
-
-# This is below code is about the localhost
 # import os
 # import sys
 # from flask import Flask, request, jsonify
