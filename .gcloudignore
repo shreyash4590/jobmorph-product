@@ -38,3 +38,10 @@ docs/
 logs/
 
 server/get-pip.py
+# ================= ADD THESE MISSING LINES =================
+.env
+.env.*
+.env.production
+.env.production.local
+*.env
+app.secret.yaml
