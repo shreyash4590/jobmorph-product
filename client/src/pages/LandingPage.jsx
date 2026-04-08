@@ -110,7 +110,7 @@ const FAQS = [
 const MARQUEE_ITEMS = [
   "AI-Powered Analysis","ATS Format Checker","Match Score in 30 Seconds",
   "Interview Prep","Company Research","Smart Job Ranking",
-  "Keyword Suggestions","Free Forever","95% Accuracy","GDPR Compliant",
+  "Keyword Suggestions","95% Accuracy","GDPR Compliant",
 ];
 
 /*
@@ -902,7 +902,7 @@ function FinalCTA({ onNavigate }) {
           <h2 className="fcta-title">Your next job starts<br /><span className="g">right here.</span></h2>
           <p className="fcta-sub">
             No more guessing. No more wasted applications.<br />
-            Know your match score before you apply — free, forever.
+            Know your match score before you apply.
           </p>
           <div className="fcta-btns">
             <button className="btn-hero-p" style={{ padding:"16px 32px", fontSize:16 }} onClick={() => onNavigate("/upload")}>
