@@ -1,558 +1,499 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { Upload, FileText, Briefcase, Sparkles, CheckCircle2, ArrowRight, X, AlertCircle } from 'lucide-react';
+import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
+import {
+  Upload, FileText, Briefcase, Sparkles, CheckCircle2,
+  ArrowRight, X, AlertCircle, Scan, Zap, Target, Shield,
+} from 'lucide-react';
+
+// ── Retry helper: retries on 502/503/504 up to `maxRetries` times ──
+const axiosWithRetry = async (config, maxRetries = 3, delayMs = 2000) => {
+  let lastError;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await axios(config);
+    } catch (err) {
+      lastError = err;
+      const status = err.response?.status;
+      const shouldRetry =
+        status === 502 || status === 503 || status === 504 ||
+        err.code === 'ERR_NETWORK' || err.code === 'ECONNABORTED';
+      if (!shouldRetry || attempt === maxRetries) throw err;
+      await new Promise((res) => setTimeout(res, delayMs * attempt));
+    }
+  }
+  throw lastError;
+};
 
 function UploadResume() {
-  const [resume, setResume] = useState(null);
-  const [jobDesc, setJobDesc] = useState('');
-  const [jdFile, setJdFile] = useState(null);
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [dragActive, setDragActive] = useState(false);
+  const [resume,       setResume]       = useState(null);
+  const [jobDesc,      setJobDesc]      = useState('');
+  const [jdFile,       setJdFile]       = useState(null);
+  const [step,         setStep]         = useState(1);
+  const [loading,      setLoading]      = useState(false);
+  const [retryCount,   setRetryCount]   = useState(0);
+  const [currentUser,  setCurrentUser]  = useState(null);
+  const [dragActive,   setDragActive]   = useState(false);
   const [dragActiveJd, setDragActiveJd] = useState(false);
-  const [error, setError] = useState(null);
+  const [error,        setError]        = useState(null);
 
   const navigate = useNavigate();
 
-  /* ================= AUTH LOGIC ================= */
   useEffect(() => {
     const auth = getAuth();
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setCurrentUser(user);
-    });
+    const unsub = onAuthStateChanged(auth, (user) => setCurrentUser(user));
     return () => unsub();
   }, []);
 
-  /* ================= ERROR MODAL ================= */
+  /* ── Error Modal ─────────────────────────────────────── */
   const ErrorModal = ({ message, onClose }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative animate-fade-in">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-            <AlertCircle className="w-6 h-6 text-red-600" />
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "linear-gradient(135deg, #fce7f3, #ede9fe)" }}>
+            <AlertCircle size={16} style={{ color: "#e91e8c" }} />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Upload Error</h3>
-            <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">
-              {message}
-            </p>
+            <h3 className="text-sm font-bold text-gray-800 mb-1">Upload Error</h3>
+            <p className="text-gray-500 text-xs whitespace-pre-line leading-relaxed">{message}</p>
           </div>
         </div>
-        <button
-          onClick={onClose}
-          className="mt-6 w-full bg-gradient-to-r from-red-600 to-red-700 text-white rounded-lg py-3 px-4 font-semibold hover:from-red-700 hover:to-red-800 transition-all"
-        >
+        <button onClick={onClose}
+          className="w-full py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
+          style={{ background: "linear-gradient(135deg, #e91e8c 0%, #7c3aed 100%)" }}>
           Got it
         </button>
       </div>
     </div>
   );
 
-  /* ================= VALIDATION HELPERS ================= */
+  /* ── Validation ──────────────────────────────────────── */
   const validateJobDescription = (text) => {
     const trimmed = text.trim();
-    
-    if (!trimmed) {
-      return { valid: false, message: "Job description cannot be empty." };
-    }
-    
-    if (trimmed.length < 100) {
-      return { 
-        valid: false, 
-        message: "Job description is too short. Please paste the complete job posting with responsibilities, requirements, and qualifications (minimum 100 characters)." 
-      };
-    }
-    
-    // Check if it's just whitespace or meaningless characters
-    const meaningfulChars = trimmed.replace(/[\s\n\r\t]/g, '').length;
-    if (meaningfulChars < 50) {
-      return { 
-        valid: false, 
-        message: "Job description doesn't contain enough meaningful content. Please paste the actual job posting." 
-      };
-    }
-    
+    if (!trimmed) return { valid: false, message: "Job description cannot be empty." };
+    if (trimmed.length < 100) return { valid: false, message: "Job description is too short. Please paste the complete job posting (minimum 100 characters)." };
+    if (trimmed.replace(/[\s\n\r\t]/g, '').length < 50) return { valid: false, message: "Job description doesn't contain enough meaningful content." };
     return { valid: true };
   };
 
-  /* ================= CORE UPLOAD LOGIC ================= */
+  /* ── Get fresh Firebase token ────────────────────────── */
+  const getFreshToken = async (user) => {
+    try {
+      return await user.getIdToken(true);
+    } catch (err) {
+      console.error('Token refresh failed:', err);
+      throw new Error('SESSION_EXPIRED');
+    }
+  };
+
+  /* ── Force sign-out and redirect on dead session ─────── */
+  const handleAuthError = useCallback(async () => {
+    try {
+      await signOut(getAuth());
+    } catch (_) {}
+    navigate('/login', { state: { from: '/upload', reason: 'session_expired' } });
+  }, [navigate]);
+
+  /* ── Build FormData ──────────────────────────────────── */
+  const buildFormData = useCallback((resume, jdFile, jobDesc) => {
+    const fd = new FormData();
+    fd.append('resume', resume);
+    if (jdFile) {
+      fd.append('jd', jdFile);
+    } else {
+      fd.append('jd', new File([new Blob([jobDesc], { type: 'text/plain' })], 'job_description.txt'));
+    }
+    return fd;
+  }, []);
+
+  /* ── Analyze ─────────────────────────────────────────── */
   const handleAnalyze = useCallback(async () => {
-    // Clear previous errors
     setError(null);
+    setRetryCount(0);
 
-    // Validate resume
-    if (!resume) {
-      setError('Please upload your resume first.');
-      return;
-    }
-
-    // Validate job description (text or file)
-    if (!jdFile && !jobDesc.trim()) {
-      setError('Please provide a job description (paste text or upload file).');
-      return;
-    }
-
-    // Validate job description text if provided
+    if (!resume) { setError('Please upload your resume first.'); return; }
+    if (!jdFile && !jobDesc.trim()) { setError('Please provide a job description (paste text or upload file).'); return; }
     if (!jdFile && jobDesc.trim()) {
-      const jdValidation = validateJobDescription(jobDesc);
-      if (!jdValidation.valid) {
-        setError(jdValidation.message);
-        return;
-      }
+      const v = validateJobDescription(jobDesc);
+      if (!v.valid) { setError(v.message); return; }
     }
-
-    // Check authentication
     if (!currentUser) {
-      navigate('/login', {
-        state: { from: '/upload', pendingRedirect: true },
-      });
+      navigate('/login', { state: { from: '/upload', pendingRedirect: true } });
       return;
     }
 
     setLoading(true);
-
     try {
-      const idToken = await currentUser.getIdToken(true);
+      const idToken = await getFreshToken(currentUser);
 
-      const formData = new FormData();
-      formData.append('resume', resume);
-
-      if (jdFile) {
-        formData.append('jd', jdFile);
-      } else {
-        const jdBlob = new Blob([jobDesc], { type: 'text/plain' });
-        const jdTextFile = new File([jdBlob], 'job_description.txt');
-        formData.append('jd', jdTextFile);
-      }
-
-      const response = await axios.post(
-        '/api/upload',
-        formData,
+      const response = await axiosWithRetry(
         {
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-          },
-        }
+          method: 'post',
+          url: '/api/upload',
+          data: buildFormData(resume, jdFile, jobDesc),
+          headers: { Authorization: `Bearer ${idToken}` },
+          timeout: 90000,
+        },
+        3,
+        2000
       );
 
       const data = response.data;
-
       if (!data.valid || !data.doc_id) {
         setError(data.message || 'Upload failed. Please try again.');
         return;
       }
-
-      // Success - navigate to results
       navigate(`/resultpage/${data.doc_id}`);
-      
+
     } catch (err) {
-      console.error('❌ Upload error:', err);
-      
-      // Handle different error scenarios
-      if (err.response?.data?.message) {
-        // Backend returned a specific error message
-        setError(err.response.data.message);
-      } else if (err.response?.status === 400) {
-        setError('Invalid file or data. Please check your files and try again.');
-      } else if (err.response?.status === 401) {
-        setError('Authentication failed. Please log in again.');
-        setTimeout(() => navigate('/login'), 2000);
+      console.error('Upload error:', err);
+
+      if (err.message === 'SESSION_EXPIRED') {
+        await handleAuthError();
+        return;
+      }
+
+      const status  = err.response?.status;
+      const message = err.response?.data?.message || '';
+
+      if (status === 401) {
+        await handleAuthError();
+        return;
+      }
+      if (status === 502 || status === 503 || status === 504) {
+        setError('The server is temporarily unavailable (all 3 attempts failed).\n\nThis is usually a temporary issue. Please wait 30 seconds and try again.');
+      } else if (status === 400) {
+        setError(message || 'Invalid file or data. Please check your files and try again.');
+      } else if (status === 413) {
+        setError('File is too large. Please reduce the file size and try again.');
       } else if (err.code === 'ERR_NETWORK') {
         setError('Network error. Please check your internet connection and try again.');
+      } else if (err.code === 'ECONNABORTED') {
+        setError('Request timed out. The server is taking too long to respond. Please try again.');
       } else {
-        setError('Something went wrong. Please try again or contact support if the issue persists.');
+        setError(message || 'Something went wrong. Please try again or contact support.');
       }
     } finally {
       setLoading(false);
+      setRetryCount(0);
     }
-  }, [resume, jobDesc, jdFile, currentUser, navigate]);
+  }, [resume, jobDesc, jdFile, currentUser, navigate, handleAuthError, buildFormData]);
 
-  /* ================= FILE UPLOAD HANDLERS ================= */
+  /* ── File handlers ───────────────────────────────────── */
   const handleResumeUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Clear previous errors
     setError(null);
-
-    const allowedExtensions = ['pdf', 'docx'];
     const ext = file.name.split('.').pop().toLowerCase();
-
-    if (!allowedExtensions.includes(ext)) {
-      setError('Invalid resume format. Only PDF and DOCX files are allowed.');
-      return;
-    }
-
-    if (file.size > 10 * 1024 * 1024) {
-      setError('Resume file is too large. Maximum size is 10MB.\n\nTip: Try compressing your PDF or removing unnecessary images.');
-      return;
-    }
-
-    // Check for minimum file size (likely empty)
-    if (file.size < 1024) {
-      setError('Resume file is too small or empty. Please upload a valid resume.');
-      return;
-    }
-
-    // Check if same as JD
-    if (jdFile && jdFile.name === file.name && jdFile.size === file.size) {
-      setError('Resume and Job Description cannot be the same file. Please upload different files.');
-      return;
-    }
-
-    setResume(file);
-    setStep(2);
+    if (!['pdf', 'docx'].includes(ext)) { setError('Invalid resume format. Only PDF and DOCX files are allowed.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setError('Resume file is too large. Maximum size is 10MB.'); return; }
+    if (file.size < 1024) { setError('Resume file is too small or empty.'); return; }
+    if (jdFile && jdFile.name === file.name && jdFile.size === file.size) { setError('Resume and Job Description cannot be the same file.'); return; }
+    setResume(file); setStep(2);
   };
 
   const handleJdFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    // Clear previous errors
     setError(null);
-
-    const allowedExtensions = ['pdf', 'docx', 'txt'];
     const ext = file.name.split('.').pop().toLowerCase();
-
-    if (!allowedExtensions.includes(ext)) {
-      setError('Invalid JD format. Only PDF, DOCX, and TXT files are allowed.');
-      return;
-    }
-
-    if (file.size > 15 * 1024 * 1024) {
-      setError('Job Description file is too large. Maximum size is 15MB.');
-      return;
-    }
-
-    // Check for minimum file size
-    if (file.size < 100) {
-      setError('Job Description file is too small or empty. Please upload a valid job posting.');
-      return;
-    }
-
-    // Check if same as resume
-    if (resume && resume.name === file.name && resume.size === file.size) {
-      setError('Resume and Job Description cannot be the same file. Please upload different files.');
-      return;
-    }
-
-    setJdFile(file);
-    setJobDesc(''); // Clear text input when file is uploaded
+    if (!['pdf', 'docx', 'txt'].includes(ext)) { setError('Invalid JD format. Only PDF, DOCX, and TXT files are allowed.'); return; }
+    if (file.size > 15 * 1024 * 1024) { setError('Job Description file is too large. Maximum size is 15MB.'); return; }
+    if (file.size < 100) { setError('Job Description file is too small or empty.'); return; }
+    if (resume && resume.name === file.name && resume.size === file.size) { setError('Resume and Job Description cannot be the same file.'); return; }
+    setJdFile(file); setJobDesc('');
   };
 
   const handleJobDescChange = (e) => {
     setJobDesc(e.target.value);
-    if (e.target.value.trim()) {
-      setJdFile(null); // Clear file when text is entered
-    }
-    setError(null); // Clear errors when typing
+    if (e.target.value.trim()) setJdFile(null);
+    setError(null);
   };
 
-  /* ================= DRAG & DROP HANDLERS ================= */
   const handleDrag = (e, isJd = false) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      isJd ? setDragActiveJd(true) : setDragActive(true);
-    } else if (e.type === "dragleave") {
-      isJd ? setDragActiveJd(false) : setDragActive(false);
-    }
+    e.preventDefault(); e.stopPropagation();
+    const active = e.type === "dragenter" || e.type === "dragover";
+    isJd ? setDragActiveJd(active) : setDragActive(active);
   };
 
   const handleDrop = (e, isJd = false) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     isJd ? setDragActiveJd(false) : setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const fakeEvent = { target: { files: [e.dataTransfer.files[0]] } };
-      isJd ? handleJdFileUpload(fakeEvent) : handleResumeUpload(fakeEvent);
+    if (e.dataTransfer.files?.[0]) {
+      const fake = { target: { files: [e.dataTransfer.files[0]] } };
+      isJd ? handleJdFileUpload(fake) : handleResumeUpload(fake);
     }
   };
 
-  /* ================= UI RENDER ================= */
+  /* ── Loading label ───────────────────────────────────── */
+  const loadingLabel = retryCount > 0
+    ? `Retrying… (attempt ${retryCount + 1} of 3)`
+    : 'Analysing Your Resume...';
+
+  /* ════════════════════════════════════════════════════════
+     UI — compact mobile-first layout from new design
+  ════════════════════════════════════════════════════════ */
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50">
-      {/* Error Modal */}
+    <div className="min-h-screen md:h-screen md:overflow-hidden bg-gray-50 flex flex-col px-4 py-4 md:px-6 md:py-4">
       {error && <ErrorModal message={error} onClose={() => setError(null)} />}
 
-      <div className="container mx-auto px-4 py-8 max-w-5xl">
-        
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-cyan-200 shadow-sm mb-4">
-            <Sparkles className="w-4 h-4 text-cyan-600" />
-            <span className="text-sm font-semibold text-cyan-700">AI-Powered Analysis</span>
-          </div>
-          
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3">
-            Upload & Analyze Resume
-          </h1>
-          <p className="text-gray-600 text-lg">
-            Get instant insights on how your resume matches the job requirements
-          </p>
+      {/* ══ HEADING SECTION ══════════════════════════════════ */}
+      <div className="mb-4 text-center flex-shrink-0">
+
+        {/* Pill badge */}
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-3"
+          style={{ background: "linear-gradient(135deg, #fce7f3, #ede9fe)" }}>
+          <Sparkles size={12} style={{ color: "#e91e8c" }} />
+          <span className="text-xs font-bold" style={{ color: "#7c3aed" }}>AI-Powered Resume Analysis</span>
         </div>
 
-        {/* Progress Steps */}
-        <div className="flex justify-between items-center mb-10 max-w-2xl mx-auto">
+        <h1 className="text-2xl sm:text-3xl font-black mb-2 bg-clip-text text-transparent leading-tight"
+          style={{ backgroundImage: "linear-gradient(135deg, #e91e8c 0%, #7c3aed 100%)" }}>
+          Upload &amp; Analyse Your Resume
+        </h1>
+
+        {/* Step indicators — compact on mobile */}
+        <div className="flex items-center justify-center mt-4 px-2">
           {[
-            { icon: Upload, label: 'Upload Resume', num: 1 },
-            { icon: Briefcase, label: 'Job Description', num: 2 },
-            { icon: CheckCircle2, label: 'View Results', num: 3 }
-          ].map((item, index) => (
-            <div key={index} className="flex flex-col items-center flex-1 relative">
-              {/* Connector Line */}
-              {index < 2 && (
-                <div className="absolute top-5 left-1/2 w-full h-1 -z-10">
-                  <div className={`h-full transition-all duration-500 rounded ${
-                    step > index + 1 ? 'bg-gradient-to-r from-cyan-500 to-blue-500' : 'bg-gray-200'
-                  }`}></div>
+            { num: 1, label: "Resume",  shortLabel: "Resume",  icon: Upload,       done: !!resume },
+            { num: 2, label: "Add JD",  shortLabel: "Add JD",  icon: Briefcase,    done: !!(jobDesc.trim() || jdFile) },
+            { num: 3, label: "Results", shortLabel: "Results", icon: CheckCircle2, done: false },
+          ].map((s, i) => (
+            <React.Fragment key={s.num}>
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center font-black text-xs sm:text-sm shadow-sm transition-all duration-300"
+                  style={s.done
+                    ? { background: "linear-gradient(135deg, #e91e8c, #7c3aed)", color: "#fff", boxShadow: "0 4px 14px rgba(233,30,140,0.3)" }
+                    : i === 0 && !resume
+                    ? { background: "linear-gradient(135deg, #fce7f3, #ede9fe)", color: "#9333ea", border: "2px solid #d8b4fe" }
+                    : { background: "#f3f4f6", color: "#9ca3af" }}
+                >
+                  {s.done ? <CheckCircle2 size={15} /> : <s.icon size={13} />}
                 </div>
-              )}
-              
-              {/* Step Circle */}
-              <div className={`relative w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all duration-500 shadow-md ${
-                step > index + 1
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white'
-                  : step === index + 1
-                  ? 'bg-white text-cyan-600 border-2 border-cyan-500'
-                  : 'bg-gray-100 text-gray-400 border border-gray-200'
-              }`}>
-                {step > index + 1 ? (
-                  <CheckCircle2 className="w-5 h-5" />
-                ) : (
-                  <span>{item.num}</span>
-                )}
+                <div className="text-center">
+                  <span className="text-[10px] sm:text-xs font-bold block"
+                    style={{ color: s.done ? "#7c3aed" : i === 0 && !resume ? "#9333ea" : "#9ca3af" }}>
+                    Step {s.num}
+                  </span>
+                  <span className="hidden sm:block text-xs font-semibold whitespace-nowrap"
+                    style={{ color: s.done ? "#4b5563" : i === 0 && !resume ? "#6b7280" : "#d1d5db" }}>
+                    {s.label}
+                  </span>
+                  <span className="block sm:hidden text-[10px] font-semibold whitespace-nowrap"
+                    style={{ color: s.done ? "#4b5563" : i === 0 && !resume ? "#6b7280" : "#d1d5db" }}>
+                    {s.shortLabel}
+                  </span>
+                </div>
               </div>
-              
-              {/* Label */}
-              <p className={`mt-2 text-xs md:text-sm font-medium transition-colors ${
-                step >= index + 1 ? 'text-gray-900' : 'text-gray-400'
-              }`}>
-                {item.label}
-              </p>
-            </div>
+              {i < 2 && (
+                <div className="flex-1 mx-1 sm:mx-3 mb-5 h-px rounded-full transition-all duration-500"
+                  style={{
+                    background: s.done ? "linear-gradient(90deg, #e91e8c, #7c3aed)" : "#e5e7eb",
+                    minWidth: "20px", maxWidth: "80px",
+                  }} />
+              )}
+            </React.Fragment>
           ))}
         </div>
+      </div>
 
-        {/* Main Content Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 md:p-8">
-          
-          {/* Resume Upload Section */}
-          <div className="mb-8">
-            <label className="flex items-center gap-2 text-lg font-bold text-gray-900 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-cyan-100 flex items-center justify-center">
-                <FileText className="w-4 h-4 text-cyan-600" />
-              </div>
-              Upload Your Resume
-              <span className="text-sm font-normal text-red-500">*</span>
-            </label>
-            
+      {/* ══ TWO COLUMN PANELS — stack on mobile ═════════════ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 flex-1 min-h-0">
+
+        {/* ── LEFT: Resume Upload ───────────────────────────── */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-4 sm:px-5 py-3 border-b border-gray-50 flex items-center gap-3 flex-shrink-0">
+            <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #fce7f3, #ede9fe)" }}>
+              <FileText size={15} style={{ color: "#9333ea" }} />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-gray-800">Your Resume</p>
+              <p className="text-xs text-gray-400">PDF or DOCX · Max 10MB</p>
+            </div>
+            {resume && (
+              <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
+                <CheckCircle2 size={11} /> Uploaded
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1 p-3 min-h-0">
             <div
-              className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-300 ${
+              className={`relative border-2 border-dashed rounded-xl transition-all duration-200 cursor-pointer h-full min-h-[160px] md:min-h-0 flex items-center justify-center ${
                 dragActive
-                  ? 'border-cyan-500 bg-cyan-50'
+                  ? 'border-purple-400 bg-purple-50'
                   : resume
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-300 bg-gray-50 hover:border-cyan-400 hover:bg-cyan-50/50'
+                  ? 'border-green-300 bg-green-50/60'
+                  : 'border-gray-200 bg-gray-50 hover:border-purple-300 hover:bg-purple-50/30'
               }`}
               onDragEnter={(e) => handleDrag(e, false)}
               onDragLeave={(e) => handleDrag(e, false)}
               onDragOver={(e) => handleDrag(e, false)}
               onDrop={(e) => handleDrop(e, false)}
             >
-              <input
-                type="file"
-                accept=".pdf,.docx"
-                onChange={handleResumeUpload}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
-              
+              <input type="file" accept=".pdf,.docx" onChange={handleResumeUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+
               {resume ? (
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle2 className="w-6 h-6 text-green-600" />
+                <div className="text-center px-4">
+                  <div className="w-11 h-11 mx-auto mb-2 rounded-2xl bg-green-100 flex items-center justify-center">
+                    <CheckCircle2 size={22} className="text-green-600" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{resume.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {(resume.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </div>
+                  <p className="font-bold text-gray-800 text-sm mb-0.5 truncate max-w-[200px] mx-auto">{resume.name}</p>
+                  <p className="text-xs text-gray-400 mb-3">{(resume.size / 1024 / 1024).toFixed(2)} MB</p>
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setResume(null);
-                      setStep(1);
-                    }}
-                    className="p-2 hover:bg-red-100 rounded-lg transition-colors group"
+                    onClick={(e) => { e.stopPropagation(); setResume(null); setStep(1); }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-xs font-semibold text-gray-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 transition-all"
                   >
-                    <X className="w-5 h-5 text-gray-400 group-hover:text-red-600" />
+                    <X size={12} /> Remove
                   </button>
                 </div>
               ) : (
-                <div className="text-center">
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-cyan-100 to-blue-100 flex items-center justify-center">
-                    <Upload className="w-8 h-8 text-cyan-600" />
+                <div className="text-center px-4">
+                  <div className="w-12 h-12 mx-auto mb-3 rounded-2xl flex items-center justify-center"
+                    style={{ background: "linear-gradient(135deg, #fce7f3, #ede9fe)" }}>
+                    <Upload size={20} style={{ color: "#9333ea" }} />
                   </div>
-                  <p className="text-gray-900 font-semibold mb-2">
-                    Drag & drop your resume here
-                  </p>
-                  <p className="text-sm text-gray-500 mb-1">
-                    or click to browse files
-                  </p>
-                  <p className="text-xs text-gray-400">
-                    Supports PDF and DOCX • Maximum 10MB
-                  </p>
+                  <p className="text-sm font-bold text-gray-700 mb-1">Drag & drop your resume</p>
+                  <p className="text-xs text-gray-400 mb-3">or click anywhere to browse</p>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                    style={{ background: "linear-gradient(135deg, #e91e8c, #7c3aed)" }}>
+                    <Upload size={11} /> Choose File
+                  </div>
                 </div>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Job Description Section */}
-          <div className={`transition-opacity duration-500 ${step >= 2 ? 'opacity-100' : 'opacity-40'}`}>
-            <label className="flex items-center gap-2 text-lg font-bold text-gray-900 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Briefcase className="w-4 h-4 text-blue-600" />
-              </div>
-              Job Description
-              <span className="text-sm font-normal text-red-500">*</span>
-            </label>
+        {/* ── RIGHT: Job Description ────────────────────────── */}
+        <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col transition-opacity duration-300 ${step >= 2 || resume ? 'opacity-100' : 'opacity-50'}`}>
+          <div className="px-4 sm:px-5 py-3 border-b border-gray-50 flex items-center gap-3 flex-shrink-0">
+            <span className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, #fce7f3, #ede9fe)" }}>
+              <Briefcase size={15} style={{ color: "#9333ea" }} />
+            </span>
+            <div>
+              <p className="text-sm font-bold text-gray-800">Job Description</p>
+              <p className="text-xs text-gray-400">Paste text or upload a file</p>
+            </div>
+            {(jobDesc.trim() || jdFile) && (
+              <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full">
+                <CheckCircle2 size={11} /> Ready
+              </span>
+            )}
+          </div>
 
-            {/* Textarea */}
+          <div className="flex-1 p-3 flex flex-col gap-2.5 min-h-0 overflow-hidden">
             <textarea
-              rows="8"
               value={jobDesc}
               onChange={handleJobDescChange}
-              disabled={step < 2}
-              placeholder="Paste the complete job description here including responsibilities, requirements, and qualifications... (minimum 100 characters)"
-              className="w-full bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-cyan-500 focus:bg-white transition-all resize-none disabled:cursor-not-allowed"
+              disabled={!resume}
+              placeholder="Paste the full job description here — include responsibilities, requirements, and qualifications (min. 100 characters)..."
+              className="flex-1 bg-gray-50 border-2 border-gray-200 rounded-xl p-3 text-sm text-gray-800 placeholder-gray-300 outline-none transition-all resize-none focus:border-purple-400 focus:bg-white focus:ring-4 focus:ring-purple-50 disabled:cursor-not-allowed disabled:opacity-60 min-h-[120px] md:min-h-0"
             />
-            
-            {/* Character count */}
+
             {jobDesc.trim().length > 0 && (
-              <p className={`text-xs mt-1 ${
-                jobDesc.trim().length >= 100 ? 'text-green-600' : 'text-orange-600'
-              }`}>
-                {jobDesc.trim().length} / 100 characters minimum
-                {jobDesc.trim().length < 100 && ` (${100 - jobDesc.trim().length} more needed)`}
+              <p className={`text-xs font-medium -mt-1 ${jobDesc.trim().length >= 100 ? 'text-green-600' : 'text-orange-500'}`}>
+                {jobDesc.trim().length} / 100 min
+                {jobDesc.trim().length < 100 && ` · ${100 - jobDesc.trim().length} more needed`}
               </p>
             )}
 
-            {/* OR Divider */}
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300"></div>
-              </div>
-              <div className="relative flex justify-center">
-                <span className="px-4 bg-white text-gray-500 text-sm font-medium">
-                  or upload as file
-                </span>
-              </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-xs text-gray-400 font-medium">or upload as file</span>
+              <div className="flex-1 h-px bg-gray-100" />
             </div>
 
-            {/* JD File Upload */}
+            {/* JD file drop zone */}
             <div
-              className={`relative border-2 border-dashed rounded-xl p-6 transition-all duration-300 ${
+              className={`relative border-2 border-dashed rounded-xl p-3 flex-shrink-0 transition-all duration-200 ${
                 dragActiveJd
-                  ? 'border-cyan-500 bg-cyan-50'
+                  ? 'border-purple-400 bg-purple-50'
                   : jdFile
-                  ? 'border-green-500 bg-green-50'
-                  : 'border-gray-300 bg-gray-50 hover:border-cyan-400 hover:bg-cyan-50/50'
+                  ? 'border-green-300 bg-green-50/60'
+                  : 'border-gray-200 bg-gray-50 hover:border-purple-300 hover:bg-purple-50/30'
               }`}
               onDragEnter={(e) => handleDrag(e, true)}
               onDragLeave={(e) => handleDrag(e, true)}
               onDragOver={(e) => handleDrag(e, true)}
               onDrop={(e) => handleDrop(e, true)}
             >
-              <input
-                type="file"
-                accept=".pdf,.docx,.txt"
-                onChange={handleJdFileUpload}
-                disabled={step < 2}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-              />
-              
+              <input type="file" accept=".pdf,.docx,.txt" onChange={handleJdFileUpload}
+                disabled={!resume}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed" />
+
               {jdFile ? (
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <CheckCircle2 size={13} className="text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{jdFile.name}</p>
-                    <p className="text-xs text-gray-500">
-                      {(jdFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
+                    <p className="font-semibold text-gray-800 text-xs truncate">{jdFile.name}</p>
+                    <p className="text-xs text-gray-400">{(jdFile.size / 1024 / 1024).toFixed(2)} MB</p>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setJdFile(null);
-                    }}
-                    className="p-2 hover:bg-red-100 rounded-lg transition-colors group"
-                  >
-                    <X className="w-4 h-4 text-gray-400 group-hover:text-red-600" />
+                  <button onClick={(e) => { e.stopPropagation(); setJdFile(null); }}
+                    className="w-7 h-7 rounded-lg hover:bg-red-100 flex items-center justify-center transition-colors group">
+                    <X size={13} className="text-gray-400 group-hover:text-red-500" />
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center justify-center gap-3 text-center">
-                  <Upload className="w-6 h-6 text-cyan-600" />
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, #fce7f3, #ede9fe)" }}>
+                    <Upload size={13} style={{ color: "#9333ea" }} />
+                  </div>
                   <div>
-                    <p className="text-gray-900 font-medium text-sm">
-                      Upload JD file (PDF, DOCX, or TXT)
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      Maximum 15MB
-                    </p>
+                    <p className="text-xs font-semibold text-gray-700">Upload JD file</p>
+                    <p className="text-xs text-gray-400">PDF, DOCX, or TXT · Max 15MB</p>
                   </div>
                 </div>
               )}
             </div>
           </div>
-
-          {/* Analyze Button */}
-          <button
-            onClick={handleAnalyze}
-            disabled={loading || !resume || (!(jobDesc.trim()) && !jdFile)}
-            className="mt-8 w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white rounded-xl py-4 px-6 font-bold text-lg shadow-lg hover:shadow-xl hover:from-cyan-700 hover:to-blue-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-lg flex items-center justify-center gap-3 group"
-          >
-            {loading ? (
-              <>
-                <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Analyzing Your Resume...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5" />
-                Start AI Analysis
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </>
-            )}
-          </button>
         </div>
+      </div>
 
-        {/* Info Cards */}
-        <div className="grid md:grid-cols-3 gap-4 mt-8">
+      {/* ══ ANALYZE BUTTON ═══════════════════════════════════ */}
+      <div className="mt-3 flex-shrink-0">
+        <button
+          onClick={handleAnalyze}
+          disabled={loading || !resume || (!jobDesc.trim() && !jdFile)}
+          className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:opacity-90 hover:shadow-lg hover:shadow-pink-200 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
+          style={{ background: "linear-gradient(135deg, #e91e8c 0%, #7c3aed 100%)" }}
+        >
+          {loading ? (
+            <>
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              {loadingLabel}
+            </>
+          ) : (
+            <>
+              <Scan size={15} />
+              Start AI Analysis
+              <ArrowRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+            </>
+          )}
+        </button>
+
+        {/* Info chips */}
+        <div className="flex items-center justify-center gap-3 sm:gap-5 mt-2 flex-wrap">
           {[
-            { icon: '⚡', title: 'Fast Results', desc: 'Get analysis in seconds' },
-            { icon: '🎯', title: 'Accurate Match', desc: 'AI-powered precision' },
-            { icon: '🔒', title: 'Secure & Private', desc: 'Your data is protected' }
-          ].map((item, index) => (
-            <div
-              key={index}
-              className="flex items-start gap-3 p-4 rounded-xl bg-white border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <span className="text-2xl">{item.icon}</span>
-              <div>
-                <h3 className="font-semibold text-gray-900 text-sm mb-1">{item.title}</h3>
-                <p className="text-xs text-gray-500">{item.desc}</p>
-              </div>
+            { icon: Zap,    text: "Results in seconds"   },
+            { icon: Target, text: "Precision AI scoring" },
+            { icon: Shield, text: "Data stays private"   },
+          ].map(({ icon: Icon, text }) => (
+            <div key={text} className="flex items-center gap-1">
+              <Icon size={11} style={{ color: "#9333ea" }} />
+              <span className="text-xs text-gray-400 font-medium whitespace-nowrap">{text}</span>
             </div>
           ))}
         </div>
@@ -562,616 +503,3 @@ function UploadResume() {
 }
 
 export default UploadResume;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect, useCallback } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import axios from 'axios';
-// import { getAuth, onAuthStateChanged } from 'firebase/auth';
-
-// function UploadResume() {
-//   const [resume, setResume] = useState(null);
-//   const [jobDesc, setJobDesc] = useState('');
-//   const [jdFile, setJdFile] = useState(null);
-//   const [step, setStep] = useState(1);
-//   const [loading, setLoading] = useState(false);
-//   const [currentUser, setCurrentUser] = useState(null);
-
-//   const navigate = useNavigate();
-
-//   /* ================= AUTH LOGIC (UNCHANGED) ================= */
-//   useEffect(() => {
-//     const auth = getAuth();
-//     const unsub = onAuthStateChanged(auth, (user) => {
-//       setCurrentUser(user);
-//     });
-//     return () => unsub();
-//   }, []);
-
-//   /* ================= CORE LOGIC (FIXED) ================= */
-//   const handleAnalyze = useCallback(async () => {
-//     if (!resume || (!(jobDesc.trim()) && !jdFile)) {
-//       alert('❗ Please upload a resume and provide a job description.');
-//       return;
-//     }
-
-//     if (!currentUser) {
-//       navigate('/login', {
-//         state: { from: '/upload', pendingRedirect: true },
-//       });
-//       return;
-//     }
-
-//     setLoading(true);
-
-//     try {
-//       const idToken = await currentUser.getIdToken(true);
-
-//       const formData = new FormData();
-//       formData.append('resume', resume);
-
-//       if (jdFile) {
-//         formData.append('jd', jdFile);
-//       } else {
-//         const jdBlob = new Blob([jobDesc], { type: 'text/plain' });
-//         const jdTextFile = new File([jdBlob], 'job_description.txt');
-//         formData.append('jd', jdTextFile);
-//       }
-
-//       const response = await axios.post(
-//         'http://127.0.0.1:5000/upload',
-//         formData,
-//         {
-//           headers: {
-//             Authorization: `Bearer ${idToken}`,
-//           },
-//         }
-//       );
-
-//       const data = response.data;
-//       console.log('Backend response:', data);
-
-//       if (!data.valid || !data.doc_id) {
-//         alert(data.message || '❌ Upload failed.');
-//         return;
-//       }
-
-//       // ✅ Backend already saved Firestore
-//       navigate(`/resultpage/${data.doc_id}`);
-//     } catch (error) {
-//       console.error('❌ Upload failed:', error);
-//       alert('Something went wrong during upload. Please try again.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   }, [resume, jobDesc, jdFile, currentUser, navigate]);
-
-//   /* ================= UI HANDLERS (UNCHANGED) ================= */
-//   const handleResumeUpload = (e) => {
-//     const file = e.target.files[0];
-//     if (!file) return;
-
-//     const allowedExtensions = ['pdf', 'docx'];
-//     const ext = file.name.split('.').pop().toLowerCase();
-
-//     if (!allowedExtensions.includes(ext)) {
-//       alert('❌ Invalid file. Only PDF and DOCX are allowed.');
-//       return;
-//     }
-
-//     if (file.size > 10 * 1024 * 1024) {
-//       alert('❌ Resume file exceeds 10MB limit.');
-//       return;
-//     }
-
-//     if (jdFile && jdFile.name === file.name && jdFile.size === file.size) {
-//       alert('❌ Resume and Job Description cannot be the same file.');
-//       return;
-//     }
-
-//     setResume(file);
-//     setStep(2);
-//   };
-
-//   const handleJdFileUpload = (e) => {
-//     const file = e.target.files[0];
-//     if (!file) return;
-
-//     const allowedExtensions = ['pdf', 'docx'];
-//     const ext = file.name.split('.').pop().toLowerCase();
-
-//     if (!allowedExtensions.includes(ext)) {
-//       alert('❌ Invalid JD file. Only PDF and DOCX are allowed.');
-//       return;
-//     }
-
-//     if (file.size > 15 * 1024 * 1024) {
-//       alert('❌ JD file exceeds 15MB limit.');
-//       return;
-//     }
-
-//     if (resume && resume.name === file.name && resume.size === file.size) {
-//       alert('❌ Resume and Job Description cannot be the same file.');
-//       return;
-//     }
-
-//     setJdFile(file);
-//     setJobDesc('');
-//   };
-
-//   const handleJobDescChange = (e) => {
-//     setJobDesc(e.target.value);
-//     setJdFile(null);
-//   };
-
-//   /* ================= UI (UNCHANGED) ================= */
-//   return (
-//     <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4 py-10">
-//       <div className="bg-white p-6 md:p-10 rounded-2xl shadow-2xl w-full max-w-3xl transition-all">
-
-//         {/* Step Indicator */}
-//         <div className="flex justify-between mb-10">
-//           {['Upload Resume', 'Add Job Description', 'View Results'].map(
-//             (label, index) => (
-//               <div key={index} className="flex flex-col items-center flex-1">
-//                 <div
-//                   className={`w-10 h-10 flex items-center justify-center rounded-full font-bold shadow-md transition-all ${
-//                     step > index
-//                       ? 'bg-blue-600 text-white'
-//                       : step === index
-//                       ? 'bg-blue-100 text-blue-600'
-//                       : 'bg-gray-300 text-gray-700'
-//                   }`}
-//                 >
-//                   {index + 1}
-//                 </div>
-//                 <p className="mt-2 text-sm text-center text-gray-700">
-//                   {label}
-//                 </p>
-//               </div>
-//             )
-//           )}
-//         </div>
-
-//         {/* Resume Upload */}
-//         <div className="mb-8">
-//           <label className="block font-semibold mb-2 text-gray-800">
-//             Resume (PDF or DOCX)
-//           </label>
-//           <div className="border-dashed border-2 border-gray-300 rounded-md p-5 hover:border-blue-500 transition">
-//             <input
-//               type="file"
-//               accept=".pdf,.docx"
-//               onChange={handleResumeUpload}
-//               className="w-full text-gray-700"
-//             />
-//           </div>
-//           <p className="text-xs text-gray-500 mt-2">
-//             Resume upload limit: 10MB
-//           </p>
-//         </div>
-
-//         {/* Job Description */}
-//         <div className="mb-8">
-//           <label className="block font-semibold mb-2 text-gray-800">
-//             Job Description
-//           </label>
-//           <textarea
-//             rows="6"
-//             value={jobDesc}
-//             onChange={handleJobDescChange}
-//             placeholder="Paste job description here..."
-//             className="w-full border border-gray-300 p-3 rounded-md focus:outline-blue-400 resize-none transition"
-//           />
-
-//           <div className="flex items-center my-4">
-//             <div className="flex-grow h-px bg-gray-300" />
-//             <span className="px-3 text-sm text-gray-500">or</span>
-//             <div className="flex-grow h-px bg-gray-300" />
-//           </div>
-
-//           <div className="border-dashed border-2 border-gray-300 rounded-md p-5 hover:border-blue-500 transition">
-//             <input
-//               type="file"
-//               accept=".pdf,.docx"
-//               onChange={handleJdFileUpload}
-//               className="w-full text-gray-700"
-//             />
-//           </div>
-//           <p className="text-xs text-gray-500 mt-2">
-//             JD file upload limit: 15MB
-//           </p>
-//         </div>
-
-//         {/* Analyze Button WITH SPINNER */}
-//         <button
-//           onClick={handleAnalyze}
-//           disabled={loading}
-//           className={`mt-6 w-full flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-md shadow-md transition ${
-//             loading ? 'opacity-60 cursor-not-allowed' : ''
-//           }`}
-//         >
-//           {loading ? (
-//             <>
-//               <svg
-//                 className="animate-spin h-5 w-5 text-white"
-//                 viewBox="0 0 24 24"
-//               >
-//                 <circle
-//                   className="opacity-25"
-//                   cx="12"
-//                   cy="12"
-//                   r="10"
-//                   stroke="currentColor"
-//                   strokeWidth="4"
-//                   fill="none"
-//                 />
-//                 <path
-//                   className="opacity-75"
-//                   fill="currentColor"
-//                   d="M4 12a8 8 0 018-8v8z"
-//                 />
-//               </svg>
-//               Analyzing...
-//             </>
-//           ) : (
-//             <>Analyze Resume</>
-//           )}
-//         </button>
-//       </div>
-//     </div>
-//   );
-// }
-
-// export default UploadResume;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// // Old Working Code.
-
-// // import React, { useState, useEffect, useCallback } from 'react';
-// // import { useNavigate } from 'react-router-dom';
-// // import axios from 'axios';
-// // import { getAuth, onAuthStateChanged } from 'firebase/auth';
-// // import { db } from '../firebase';
-// // import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-
-// // function UploadResume() {
-// //   const [resume, setResume] = useState(null);
-// //   const [jobDesc, setJobDesc] = useState('');
-// //   const [jdFile, setJdFile] = useState(null);
-// //   const [step, setStep] = useState(1);
-// //   const [loading, setLoading] = useState(false);
-// //   const [currentUser, setCurrentUser] = useState(null);
-
-// //   const navigate = useNavigate();
-
-// //   /* ================= AUTH LOGIC (UNCHANGED) ================= */
-// //   useEffect(() => {
-// //     const auth = getAuth();
-// //     const unsub = onAuthStateChanged(auth, (user) => {
-// //       setCurrentUser(user);
-// //     });
-// //     return () => unsub();
-// //   }, []);
-
-// //   /* ================= CORE LOGIC (UNCHANGED) ================= */
-// //   const handleAnalyze = useCallback(async () => {
-// //     if (!resume || (!(jobDesc.trim()) && !jdFile)) {
-// //       alert('❗ Please upload a resume and provide a job description.');
-// //       return;
-// //     }
-
-// //     if (!currentUser) {
-// //       navigate('/login', {
-// //         state: { from: '/upload', pendingRedirect: true },
-// //       });
-// //       return;
-// //     }
-
-// //     setLoading(true);
-
-// //     try {
-// //       const idToken = await currentUser.getIdToken(true);
-
-// //       const formData = new FormData();
-// //       formData.append('resume', resume);
-
-// //       if (jdFile) {
-// //         formData.append('jd', jdFile);
-// //       } else {
-// //         const jdBlob = new Blob([jobDesc], { type: 'text/plain' });
-// //         const jdTextFile = new File([jdBlob], 'job_description.txt');
-// //         formData.append('jd', jdTextFile);
-// //       }
-
-// //       const response = await axios.post(
-// //         'http://127.0.0.1:5000/upload',
-// //         formData,
-// //         {
-// //           headers: {
-// //             'Content-Type': 'multipart/form-data',
-// //             Authorization: `Bearer ${idToken}`,
-// //           },
-// //         }
-// //       );
-
-// //       const data = response.data;
-
-// //       if (!data.valid) {
-// //         alert(data.message || '❌ Upload failed.');
-// //         return;
-// //       }
-
-// //       if (data.jd_text) {
-// //         localStorage.setItem("latest_jd_text", data.jd_text);
-// //       }
-
-// //       const docRef = await addDoc(collection(db, 'resume_analysis'), {
-// //         user_id: currentUser.uid,
-// //         resume_name: resume.name,
-// //         jd_name: jdFile?.name || 'Pasted JD',
-// //         gemini_score: data.gemini_score || 0,
-// //         gemini_missing_keywords: data.gemini_missing_keywords || [],
-// //         gemini_suggestions: data.gemini_suggestions || [],
-// //         gemini_learning_resources: data.gemini_learning_resources || [],
-// //         timestamp: serverTimestamp(),
-// //       });
-
-// //       navigate(`/resultpage/${docRef.id}`);
-// //     } catch (error) {
-// //       console.error('❌ Upload failed:', error);
-// //       alert('Something went wrong during upload. Please try again.');
-// //     } finally {
-// //       setLoading(false);
-// //     }
-// //   }, [resume, jobDesc, jdFile, currentUser, navigate]);
-
-// //   /* ================= UI HANDLERS (UNCHANGED) ================= */
-// //   const handleResumeUpload = (e) => {
-// //     const file = e.target.files[0];
-// //     if (!file) return;
-
-// //     const allowedExtensions = ['pdf', 'docx'];
-// //     const ext = file.name.split('.').pop().toLowerCase();
-
-// //     if (!allowedExtensions.includes(ext)) {
-// //       alert('❌ Invalid file. Only PDF and DOCX are allowed.');
-// //       return;
-// //     }
-
-// //     if (file.size > 10 * 1024 * 1024) {
-// //       alert('❌ Resume file exceeds 10MB limit.');
-// //       return;
-// //     }
-
-// //     if (jdFile && jdFile.name === file.name && jdFile.size === file.size) {
-// //       alert('❌ Resume and Job Description cannot be the same file.');
-// //       return;
-// //     }
-
-// //     setResume(file);
-// //     setStep(2);
-// //   };
-
-// //   const handleJdFileUpload = (e) => {
-// //     const file = e.target.files[0];
-// //     if (!file) return;
-
-// //     const allowedExtensions = ['pdf', 'docx'];
-// //     const ext = file.name.split('.').pop().toLowerCase();
-
-// //     if (!allowedExtensions.includes(ext)) {
-// //       alert('❌ Invalid JD file. Only PDF and DOCX are allowed.');
-// //       return;
-// //     }
-
-// //     if (file.size > 15 * 1024 * 1024) {
-// //       alert('❌ JD file exceeds 15MB limit.');
-// //       return;
-// //     }
-
-// //     if (resume && resume.name === file.name && resume.size === file.size) {
-// //       alert('❌ Resume and Job Description cannot be the same file.');
-// //       return;
-// //     }
-
-// //     setJdFile(file);
-// //     setJobDesc('');
-// //   };
-
-// //   const handleJobDescChange = (e) => {
-// //     setJobDesc(e.target.value);
-// //     setJdFile(null);
-// //   };
-
-// //   /* ================= UI (OLD UI + LOADING ANIMATION) ================= */
-// //   return (
-// //     <div className="min-h-screen bg-blue-50 flex items-center justify-center px-4 py-10">
-// //       <div className="bg-white p-6 md:p-10 rounded-2xl shadow-2xl w-full max-w-3xl transition-all">
-
-// //         {/* Step Indicator */}
-// //         <div className="flex justify-between mb-10">
-// //           {['Upload Resume', 'Add Job Description', 'View Results'].map(
-// //             (label, index) => (
-// //               <div key={index} className="flex flex-col items-center flex-1">
-// //                 <div
-// //                   className={`w-10 h-10 flex items-center justify-center rounded-full font-bold shadow-md transition-all ${
-// //                     step > index
-// //                       ? 'bg-blue-600 text-white'
-// //                       : step === index
-// //                       ? 'bg-blue-100 text-blue-600'
-// //                       : 'bg-gray-300 text-gray-700'
-// //                   }`}
-// //                 >
-// //                   {index + 1}
-// //                 </div>
-// //                 <p className="mt-2 text-sm text-center text-gray-700">
-// //                   {label}
-// //                 </p>
-// //               </div>
-// //             )
-// //           )}
-// //         </div>
-
-// //         {/* Resume Upload */}
-// //         <div className="mb-8">
-// //           <label className="block font-semibold mb-2 text-gray-800">
-// //             Resume (PDF or DOCX)
-// //           </label>
-// //           <div className="border-dashed border-2 border-gray-300 rounded-md p-5 hover:border-blue-500 transition">
-// //             <input
-// //               type="file"
-// //               accept=".pdf,.docx"
-// //               onChange={handleResumeUpload}
-// //               className="w-full text-gray-700"
-// //             />
-// //           </div>
-// //           <p className="text-xs text-gray-500 mt-2">
-// //             Resume upload limit: 10MB
-// //           </p>
-// //         </div>
-
-// //         {/* Job Description */}
-// //         <div className="mb-8">
-// //           <label className="block font-semibold mb-2 text-gray-800">
-// //             Job Description
-// //           </label>
-// //           <textarea
-// //             rows="6"
-// //             value={jobDesc}
-// //             onChange={handleJobDescChange}
-// //             placeholder="Paste job description here..."
-// //             className="w-full border border-gray-300 p-3 rounded-md focus:outline-blue-400 resize-none transition"
-// //           />
-
-// //           <div className="flex items-center my-4">
-// //             <div className="flex-grow h-px bg-gray-300" />
-// //             <span className="px-3 text-sm text-gray-500">or</span>
-// //             <div className="flex-grow h-px bg-gray-300" />
-// //           </div>
-
-// //           <div className="border-dashed border-2 border-gray-300 rounded-md p-5 hover:border-blue-500 transition">
-// //             <input
-// //               type="file"
-// //               accept=".pdf,.docx"
-// //               onChange={handleJdFileUpload}
-// //               className="w-full text-gray-700"
-// //             />
-// //           </div>
-// //           <p className="text-xs text-gray-500 mt-2">
-// //             JD file upload limit: 15MB
-// //           </p>
-// //         </div>
-
-// //         {/* Analyze Button WITH SPINNER */}
-// //         <button
-// //           onClick={handleAnalyze}
-// //           disabled={loading}
-// //           className={`mt-6 w-full flex justify-center items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-md shadow-md transition ${
-// //             loading ? 'opacity-60 cursor-not-allowed' : ''
-// //           }`}
-// //         >
-// //           {loading ? (
-// //             <>
-// //               <svg
-// //                 className="animate-spin h-5 w-5 text-white"
-// //                 viewBox="0 0 24 24"
-// //               >
-// //                 <circle
-// //                   className="opacity-25"
-// //                   cx="12"
-// //                   cy="12"
-// //                   r="10"
-// //                   stroke="currentColor"
-// //                   strokeWidth="4"
-// //                   fill="none"
-// //                 />
-// //                 <path
-// //                   className="opacity-75"
-// //                   fill="currentColor"
-// //                   d="M4 12a8 8 0 018-8v8z"
-// //                 />
-// //               </svg>
-// //               Analyzing...
-// //             </>
-// //           ) : (
-// //             <>Analyze Resume</>
-// //           )}
-// //         </button>
-// //       </div>
-// //     </div>
-// //   );
-// // }
-
-// // export default UploadResume;

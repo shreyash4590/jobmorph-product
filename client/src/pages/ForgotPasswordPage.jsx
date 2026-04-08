@@ -2,46 +2,45 @@ import React, { useState } from "react";
 import { auth } from "../firebase";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { useNavigate, Link } from "react-router-dom";
-import { motion } from "framer-motion";
-import { Mail, ArrowLeft, Send, CheckCircle, AlertCircle } from "lucide-react";
+import { Mail, ArrowLeft, Send } from "lucide-react";
 
+/* ─── Spinner ─── */
+const Spinner = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"
+    className="auth-spinner">
+    <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+    <path d="M4 12a8 8 0 018-8" stroke="#fff"/>
+  </svg>
+);
+
+/* ─── Field error icon ─── */
+const ErrIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 20 20" fill="#ef4444" style={{ flexShrink:0, marginTop:"1px" }}>
+    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+  </svg>
+);
+
+/* ══════════════════════════════════════════════════
+   MAIN COMPONENT
+══════════════════════════════════════════════════ */
 const ForgotPasswordPage = () => {
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [email, setEmail]                   = useState("");
+  const [sentTo, setSentTo]                 = useState("");
+  const [error, setError]                   = useState("");
+  const [loading, setLoading]               = useState(false);
+  const [resendLoading, setResendLoading]   = useState(false);
+  const [resendSuccess, setResendSuccess]   = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const navigate    = useNavigate();
+  const cooldownRef = React.useRef(null);
 
-  const handleReset = async (e) => {
-    e.preventDefault();
-    setError("");
-    setMessage("");
-
-    const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail) {
-      setError("Please enter your registered email address.");
-      return;
-    }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmedEmail)) {
-      setError("Please enter a valid email address.");
-      return;
-    }
-
-    setLoading(true);
+  /* ── Send / resend handler ── */
+  const sendReset = async (targetEmail) => {
     try {
-      await sendPasswordResetEmail(auth, trimmedEmail);
-      setMessage(
-        "Password reset link sent successfully! Please check your email and follow the instructions."
-      );
-
-      // Redirect user back to login after a short delay
-      setTimeout(() => navigate("/login"), 4000);
+      await sendPasswordResetEmail(auth, targetEmail);
+      return true;
     } catch (err) {
       console.error("Reset error:", err);
-
       if (err.code === "auth/user-not-found") {
         setError("No account found with this email address.");
       } else if (err.code === "auth/invalid-email") {
@@ -51,282 +50,257 @@ const ForgotPasswordPage = () => {
       } else {
         setError("Unable to send reset email. Please try again later.");
       }
-    } finally {
-      setLoading(false);
+      return false;
     }
   };
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-cyan-50 via-white to-blue-50 px-4 py-12 relative overflow-hidden">
-      
-      {/* Animated Background Orbs */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div 
-          animate={{ 
-            scale: [1, 1.2, 1],
-            opacity: [0.3, 0.5, 0.3]
-          }}
-          transition={{ duration: 8, repeat: Infinity }}
-          className="absolute top-1/4 -left-20 w-96 h-96 bg-cyan-400/10 rounded-full blur-3xl"
-        />
-        <motion.div 
-          animate={{ 
-            scale: [1.2, 1, 1.2],
-            opacity: [0.5, 0.3, 0.5]
-          }}
-          transition={{ duration: 10, repeat: Infinity, delay: 1 }}
-          className="absolute bottom-1/4 -right-20 w-[500px] h-[500px] bg-blue-400/10 rounded-full blur-3xl"
-        />
-      </div>
+  /* ── Initial form submit ── */
+  const handleReset = async (e) => {
+    e.preventDefault();
+    setError("");
 
-      {/* Main Card */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden"
-      >
-        
-        {/* Header with Gradient */}
-        <div className="bg-gradient-to-r from-cyan-500 to-blue-600 px-8 py-10 text-white relative">
-          <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-20 -mt-20"></div>
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-16 -mb-16"></div>
-          
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="relative"
-          >
-            {/* Logo/Icon */}
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center shadow-lg">
-                <Mail className="w-10 h-10 text-white" />
-              </div>
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setError("Please enter your registered email address.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmedEmail)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+
+    setLoading(true);
+    const ok = await sendReset(trimmedEmail);
+    setLoading(false);
+    if (ok) setSentTo(trimmedEmail);
+  };
+
+  /* ── Resend cooldown ── */
+  const startCooldown = (secs) => {
+    setResendCooldown(secs);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown(prev => {
+        if (prev <= 1) { clearInterval(cooldownRef.current); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  /* ── Resend link click ── */
+  const handleResend = async () => {
+    if (resendLoading || resendCooldown > 0) return;
+    setResendLoading(true);
+    setResendSuccess(false);
+    setError("");
+    const ok = await sendReset(sentTo);
+    setResendLoading(false);
+    if (ok) {
+      setResendSuccess(true);
+      startCooldown(60);
+    }
+  };
+
+  const onKey = (e) => e.key === "Enter" && !loading && handleReset(e);
+
+  /* ════════════════════════════════════════
+     SUCCESS STATE
+  ════════════════════════════════════════ */
+  if (sentTo) {
+    return (
+      <div className="fp-page">
+        <div className="fp-bg-blob fp-blob-1"/>
+        <div className="fp-bg-blob fp-blob-2"/>
+        <div className="fp-bg-blob fp-blob-3"/>
+
+        <div className="fp-wrap">
+
+          {/* Brand */}
+          <div className="fp-brand-row">
+            <div className="fp-logo-box">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
+                <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+              </svg>
             </div>
+            <span className="fp-brand-name">JOBMORPH</span>
+          </div>
 
-            <h2 className="text-3xl font-black text-center mb-2">
-              Forgot Password?
-            </h2>
-            <p className="text-cyan-100 text-center text-sm">
-              No worries! We'll send you reset instructions
+          {/* ── Success Card ── */}
+          <div className="fp-success-card">
+
+            <h2 className="fp-success-title">Check your email</h2>
+
+            <p className="fp-success-body">
+              A link to reset your password has been sent to{" "}
+              <strong className="fp-success-email">{sentTo}</strong>.
             </p>
-          </motion.div>
-        </div>
 
-        {/* Form Section */}
-        <div className="px-8 py-8">
-          <form onSubmit={handleReset} className="space-y-6">
-            
-            {/* Email Input */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
-                  <Mail className="w-5 h-5 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  placeholder="Enter your registered email"
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-cyan-500 transition-colors text-gray-900 placeholder-gray-400"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading}
-                />
-              </div>
-            </div>
+            <p className="fp-success-body">
+              If you do not receive the email, check that it's the email address
+              you used to sign up for your JobMorph account.
+            </p>
 
-            {/* Error Message */}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-start gap-3 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg"
-              >
-                <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-red-700 text-sm font-medium">{error}</p>
-              </motion.div>
-            )}
+            <p className="fp-success-body">
+              Be sure to check your spam folder, too.
+            </p>
 
-            {/* Success Message */}
-            {message && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-start gap-3 p-4 bg-green-50 border-l-4 border-green-500 rounded-lg"
-              >
-                <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
-                <p className="text-green-700 text-sm font-medium">{message}</p>
-              </motion.div>
-            )}
-
-            {/* Submit Button */}
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileHover={{ scale: loading ? 1 : 1.02 }}
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white py-3.5 rounded-xl font-bold text-lg hover:shadow-xl hover:shadow-cyan-500/30 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  Sending...
-                </>
+            {/* Resend */}
+            <p className="fp-resend-row">
+              Didn't receive the link?{" "}
+              {resendCooldown > 0 ? (
+                <span className="fp-resend-cooldown">
+                  {resendSuccess ? "Sent! " : ""}Resend in {resendCooldown}s
+                </span>
               ) : (
-                <>
-                  <Send className="w-5 h-5" />
-                  Send Reset Link
-                </>
+                <button
+                  onClick={handleResend}
+                  disabled={resendLoading}
+                  className="fp-resend-btn"
+                >
+                  {resendLoading ? "Sending…" : "Send again"}
+                </button>
               )}
-            </motion.button>
+              {!resendCooldown && "."}
+            </p>
 
-            {/* Back to Login Link */}
-            <div className="text-center">
-              <Link
-                to="/login"
-                className="inline-flex items-center gap-2 text-cyan-600 hover:text-cyan-700 font-semibold transition-colors group"
-              >
-                <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                Back to Login
-              </Link>
-            </div>
-          </form>
-
-          {/* Help Section */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <div className="bg-cyan-100 p-2 rounded-lg">
-                  <svg className="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900 text-sm mb-1">Need help?</h4>
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    If you don't receive the email within a few minutes, check your spam folder or contact our support team.
-                  </p>
-                </div>
+            {/* Inline error */}
+            {error && (
+              <div className="fp-inline-error">
+                <ErrIcon/><span>{error}</span>
               </div>
+            )}
+
+            <div className="fp-divider"/>
+
+            {/* ── Need Help → opens /contact page ── */}
+            <Link to="/contact" className="fp-help-link-box">
+              <div className="fp-help-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                  stroke="#7c3aed" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+              </div>
+              <div className="fp-help-link-text">
+                <div className="fp-help-title">Need help?</div>
+                <p className="fp-help-text">Contact our support team for assistance.</p>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24"
+                fill="none" stroke="#7c3aed" strokeWidth="2.5">
+                <path d="M9 18l6-6-6-6"/>
+              </svg>
+            </Link>
+
+            <div className="fp-divider"/>
+
+            {/* Back to login */}
+            <Link to="/login" className="fp-back-link">
+              <ArrowLeft size={14}/> Back to Login
+            </Link>
+
+          </div>
+          {/* ── End Success Card ── */}
+
+        </div>
+      </div>
+    );
+  }
+
+  /* ════════════════════════════════════════
+     FORM STATE
+  ════════════════════════════════════════ */
+  return (
+    <div className="fp-page">
+      <div className="fp-bg-blob fp-blob-1"/>
+      <div className="fp-bg-blob fp-blob-2"/>
+      <div className="fp-bg-blob fp-blob-3"/>
+
+      <div className="fp-wrap">
+
+        {/* Brand */}
+        <div className="fp-brand-row">
+          <div className="fp-logo-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">
+              <path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>
+            </svg>
+          </div>
+          <span className="fp-brand-name">JOBMORPH</span>
+        </div>
+
+        {/* Mail icon */}
+        <div className="fp-icon-wrap">
+          <div className="fp-icon-box">
+            <Mail size={28} color="#fff"/>
+          </div>
+        </div>
+
+        <h2 className="fp-title">Forgot Password?</h2>
+        <p className="fp-sub">
+          Enter your registered email and we'll send<br/>you a reset link right away.
+        </p>
+
+        <form onSubmit={handleReset} className="fp-form">
+
+          <div className="fp-field">
+            <label className="fp-label">Email Address</label>
+            <div className="fp-input-wrap">
+              <span className="fp-input-icon"><Mail size={16}/></span>
+              <input
+                type="email"
+                placeholder="Enter your registered email"
+                value={email}
+                onChange={e => { setEmail(e.target.value); setError(""); }}
+                onKeyDown={onKey}
+                disabled={loading}
+                className="fp-input"
+              />
             </div>
+            {error && (
+              <div className="fp-field-error">
+                <ErrIcon/><span>{error}</span>
+              </div>
+            )}
           </div>
 
-          {/* Don't have an account */}
-          <div className="mt-6 text-center">
-            <p className="text-gray-600 text-sm">
-              Don't have an account?{" "}
-              <Link
-                to="/signup"
-                className="text-cyan-600 hover:text-cyan-700 font-semibold transition-colors"
-              >
-                Sign up
-              </Link>
+          <button type="submit" disabled={loading} className="fp-btn">
+            {loading ? <><Spinner/> Sending…</> : <><Send size={16}/> Send Reset Link</>}
+          </button>
+
+        </form>
+
+        <div className="fp-back-row">
+          <Link to="/login" className="fp-back-link">
+            <ArrowLeft size={14}/> Back to Login
+          </Link>
+        </div>
+
+        {/* Static help tip on form state */}
+        <div className="fp-help-box">
+          <div className="fp-help-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+              stroke="#7c3aed" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div>
+            <div className="fp-help-title">Need help?</div>
+            <p className="fp-help-text">
+              If you don't receive the email within a few minutes, check your spam folder.
             </p>
           </div>
         </div>
-      </motion.div>
 
-      {/* Footer Note */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5 }}
-        className="absolute bottom-8 left-0 right-0 text-center"
-      >
-        <p className="text-sm text-gray-500">
-          Protected by advanced security • Your data is safe with us
+        <p className="fp-signup-row">
+          Don't have an account?{" "}
+          <Link to="/signup" className="fp-signup-link">Sign up</Link>
         </p>
-      </motion.div>
+
+      </div>
     </div>
   );
 };
 
 export default ForgotPasswordPage;
-
-
-
-
-
-
-// import React, { useState } from "react";
-// import { auth } from "../firebase";
-// import { sendPasswordResetEmail } from "firebase/auth";
-// import { useNavigate } from "react-router-dom";
-
-// const ForgotPasswordPage = () => {
-//   const [email, setEmail] = useState("");
-//   const [message, setMessage] = useState("");
-//   const [error, setError] = useState("");
-//   const [loading, setLoading] = useState(false);
-//   const navigate = useNavigate();
-
-//   const handleReset = async () => {
-//     setError("");
-//     setMessage("");
-
-//     const trimmedEmail = email.trim().toLowerCase();
-//     if (!trimmedEmail) {
-//       setError("Please enter your registered email address.");
-//       return;
-//     }
-
-//     setLoading(true);
-//     try {
-//       await sendPasswordResetEmail(auth, trimmedEmail);
-//       setMessage(
-//         "Password reset link sent. Please check your email and follow the instructions."
-//       );
-
-//       // Redirect user back to login after a short delay
-//       setTimeout(() => navigate("/login"), 4000);
-//     } catch (err) {
-//       console.error("Reset error:", err);
-
-//       if (err.code === "auth/user-not-found") {
-//         setError("No account found with this email.");
-//       } else {
-//         setError("Unable to send reset email. Please try again later.");
-//       }
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-//       <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-md">
-//         <h2 className="text-xl font-semibold text-center mb-2">
-//           Reset your password
-//         </h2>
-
-//         <p className="text-sm text-gray-500 text-center mb-5">
-//           Enter your email and we’ll send you a reset link
-//         </p>
-
-//         <input
-//           type="email"
-//           placeholder="Email address"
-//           className="w-full mb-3 p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-//           value={email}
-//           onChange={(e) => setEmail(e.target.value)}
-//         />
-
-//         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-//         {message && <p className="text-green-600 text-sm mb-2">{message}</p>}
-
-//         <button
-//           onClick={handleReset}
-//           disabled={loading}
-//           className="w-full bg-blue-600 text-white py-2 rounded font-semibold hover:bg-blue-700 disabled:opacity-50"
-//         >
-//           {loading ? "Sending..." : "Send Reset Link"}
-//         </button>
-//       </div>
-//     </div>
-//   );
-// };
-
-// export default ForgotPasswordPage;

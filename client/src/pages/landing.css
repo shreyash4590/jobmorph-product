@@ -1,0 +1,764 @@
+/* ═══════════════════════════════════════════════════
+   JobMorph Landing — landing.css
+   ALL styles scoped to .jm-landing wrapper
+   Zero leakage into dashboard or other pages
+═══════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Nunito+Sans:wght@300;400;500;600;700&display=swap');
+
+/* ── KEYFRAMES — prefixed so they don't conflict ── */
+@keyframes jm-spin { to { transform: rotate(360deg); } }
+@keyframes jm-spin-slow { to { transform: rotate(360deg); } }
+@keyframes jm-pulse-slow { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }
+@keyframes jm-blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+@keyframes jm-mq { to { transform: translateX(-50%); } }
+@keyframes jm-flt { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-16px)} }
+
+/* ── ROOT WRAPPER — all styles live inside this ── */
+.jm-landing {
+  --p1: #7c3aed;
+  --p2: #9333ea;
+  --pk: #ec4899;
+  --gr: #10b981;
+  --am: #f59e0b;
+  --grad: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  --white: #ffffff;
+  --bg: #f8f7ff;
+  --border: #ede9fe;
+  --ink: #1e1b4b;
+  --muted: #6b7280;
+  --soft: #a78bfa;
+  --r: 16px;
+  --rl: 20px;
+  --rx: 28px;
+  font-family: 'Nunito Sans', sans-serif;
+  color: #1e1b4b;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  background: #f8f7ff;
+}
+
+.jm-landing *, .jm-landing *::before, .jm-landing *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── PROGRESS BAR ── */
+.jm-landing #jm-pbar {
+  position: fixed; top: 0; left: 0; height: 3px;
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  z-index: 300; transition: width .08s; border-radius: 0 2px 2px 0;
+}
+
+/* ── NAVBAR ── */
+.jm-landing .jm-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  padding: 0 48px; transition: all .3s;
+}
+.jm-landing .jm-nav.scrolled {
+  background: rgba(255,255,255,.97);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid #ede9fe;
+  box-shadow: 0 4px 32px rgba(124,58,237,.08);
+}
+.jm-landing .nav-in {
+  max-width: 1200px; margin: 0 auto;
+  height: 68px; display: flex; align-items: center; justify-content: space-between;
+}
+.jm-landing .logo {
+  display: flex; align-items: center; gap: 10px; text-decoration: none;
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.jm-landing .logo-ico {
+  width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(124,58,237,.35);
+}
+.jm-landing .logo-text {
+  font-family: 'Nunito', sans-serif; font-weight: 900; font-size: 18px; letter-spacing: -.3px;
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.jm-landing .nav-links { display: flex; gap: 32px; list-style: none; }
+.jm-landing .nav-links button {
+  background: none; border: none; font-family: 'Nunito Sans', sans-serif;
+  font-size: 14px; font-weight: 600; color: #6b7280;
+  cursor: pointer; padding: 6px 0; transition: color .2s;
+  position: relative; z-index: 0;
+}
+.jm-landing .nav-links button:hover { color: #7c3aed; }
+
+/* ── NAV ACTIVE STATE ── */
+.jm-landing .nav-links button.nav-active {
+  color: #7c3aed;
+  font-weight: 700;
+}
+/* Gradient underline that stays when active */
+.jm-landing .nav-links button::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 2.5px;
+  border-radius: 100px;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  transition: width 0.25s ease;
+}
+.jm-landing .nav-links button.nav-active::after {
+  width: 100%;
+}
+/* Subtle bg pill behind active text */
+.jm-landing .nav-links button::before {
+  content: '';
+  position: absolute;
+  inset: -4px -10px;
+  border-radius: 8px;
+  background: rgba(124,58,237,0);
+  transition: background 0.2s ease;
+  z-index: -1;
+}
+.jm-landing .nav-links button.nav-active::before {
+  background: rgba(124,58,237,.08);
+}
+
+/* ── MOBILE ACTIVE ── */
+.jm-landing .mob-link {
+  background: none; border: none; cursor: pointer; font-family: 'Nunito', sans-serif;
+  font-size: 22px; font-weight: 900; color: #1e1b4b;
+  padding: 12px 16px; text-align: left; transition: all .2s; letter-spacing: -.5px;
+  border-radius: 12px; width: 100%;
+}
+.jm-landing .mob-link:hover { color: #7c3aed; background: rgba(124,58,237,.05); }
+.jm-landing .mob-link.mob-active {
+  color: #7c3aed;
+  background: linear-gradient(135deg, rgba(124,58,237,.1), rgba(236,72,153,.06));
+}
+
+.jm-landing .nav-actions { display: flex; align-items: center; gap: 10px; }
+.jm-landing .btn-ghost2 {
+  background: none; border: 1.5px solid #ede9fe; font-family: 'Nunito Sans', sans-serif;
+  font-size: 14px; font-weight: 700; color: #7c3aed;
+  cursor: pointer; padding: 8px 18px; border-radius: 10px; transition: all .2s;
+}
+.jm-landing .btn-ghost2:hover { background: #ede9fe; }
+.jm-landing .btn-nav {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  color: #fff; border: none; font-family: 'Nunito', sans-serif;
+  font-size: 14px; font-weight: 800; padding: 10px 22px; border-radius: 10px;
+  cursor: pointer; transition: all .2s; box-shadow: 0 4px 16px rgba(124,58,237,.3);
+}
+.jm-landing .btn-nav:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,58,237,.4); }
+.jm-landing .hamburger { display: none; background: none; border: none; cursor: pointer; color: #7c3aed; padding: 4px; }
+
+/* ── MOBILE MENU ── */
+.jm-landing .mob-menu {
+  display: none; position: fixed; inset: 0; z-index: 99;
+  background: #fff; padding: 20px 24px; flex-direction: column;
+}
+.jm-landing .mob-menu.open { display: flex; }
+.jm-landing .mob-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #ede9fe;
+}
+.jm-landing .mob-close { background: none; border: none; cursor: pointer; color: #7c3aed; }
+.jm-landing .mob-navs { display: flex; flex-direction: column; gap: 4px; }
+.jm-landing .mob-acts {
+  margin-top: auto; display: flex; flex-direction: column; gap: 12px;
+  padding-top: 32px; border-top: 2px solid #ede9fe;
+}
+
+/* ── HERO ── */
+.jm-landing .hero {
+  min-height: 100vh; display: flex; flex-direction: column;
+  justify-content: center; padding: 120px 48px 80px;
+  position: relative; overflow: hidden; background: #fff;
+}
+.jm-landing .hero-deco { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.jm-landing .deco-dots {
+  position: absolute; inset: 0;
+  background-image: radial-gradient(circle, rgba(124,58,237,.12) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, black 20%, transparent 100%);
+}
+.jm-landing .deco-blob { position: absolute; border-radius: 50%; }
+.jm-landing .deco-blob1 {
+  width: 700px; height: 700px; top: -200px; right: -180px;
+  background: linear-gradient(135deg, rgba(124,58,237,.12), rgba(236,72,153,.08));
+  animation: jm-spin-slow 30s linear infinite;
+}
+.jm-landing .deco-blob2 {
+  width: 400px; height: 400px; bottom: -100px; left: -100px;
+  background: linear-gradient(135deg, rgba(236,72,153,.08), rgba(249,115,22,.06));
+  animation: jm-spin-slow 25s linear infinite reverse;
+}
+.jm-landing .deco-blob3 {
+  width: 200px; height: 200px; top: 30%; left: 38%;
+  background: rgba(167,139,250,.07); animation: jm-pulse-slow 6s ease-in-out infinite;
+}
+.jm-landing .hero-inner {
+  max-width: 1200px; margin: 0 auto; width: 100%; position: relative; z-index: 1;
+  display: grid; grid-template-columns: 1.05fr .95fr; gap: 80px; align-items: center;
+}
+.jm-landing .hero-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 14px 6px 8px; border-radius: 100px;
+  background: linear-gradient(135deg, rgba(124,58,237,.1), rgba(236,72,153,.08));
+  border: 1.5px solid rgba(124,58,237,.2); margin-bottom: 28px; width: fit-content;
+}
+.jm-landing .badge-pill {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  color: #fff; border-radius: 100px; padding: 3px 10px;
+  font-family: 'Nunito', sans-serif; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+}
+.jm-landing .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; animation: jm-blink 2s infinite; }
+.jm-landing .badge-text { font-size: 13px; font-weight: 700; color: #7c3aed; }
+.jm-landing .hero-h {
+  font-family: 'Nunito', sans-serif; font-size: clamp(44px, 5.2vw, 70px);
+  font-weight: 900; line-height: 1.06; letter-spacing: -2px; color: #1e1b4b; margin-bottom: 24px;
+}
+.jm-landing .grad-text {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; display: block;
+}
+.jm-landing .hero-sub { font-size: 17px; line-height: 1.72; color: #6b7280; max-width: 470px; margin-bottom: 40px; font-weight: 500; }
+.jm-landing .hero-sub strong { color: #1e1b4b; font-weight: 700; }
+.jm-landing .hero-ctas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 48px; }
+.jm-landing .btn-hero-p {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 15px 28px; border-radius: 14px; border: none; cursor: pointer;
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%); color: #fff;
+  font-family: 'Nunito', sans-serif; font-size: 16px; font-weight: 800;
+  transition: all .25s; box-shadow: 0 8px 24px rgba(124,58,237,.35);
+}
+.jm-landing .btn-hero-p:hover { transform: translateY(-2px); box-shadow: 0 14px 36px rgba(124,58,237,.45); }
+.jm-landing .btn-hero-p .arr { display: flex; align-items: center; transition: transform .2s; }
+.jm-landing .btn-hero-p:hover .arr { transform: translateX(4px); }
+.jm-landing .btn-hero-s {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 26px; border-radius: 14px; cursor: pointer;
+  background: #fff; color: #7c3aed; border: 2px solid #ede9fe;
+  font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 800; transition: all .25s;
+}
+.jm-landing .btn-hero-s:hover { border-color: #7c3aed; background: rgba(124,58,237,.04); }
+.jm-landing .trust-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.jm-landing .trust-item {
+  display: flex; align-items: center; gap: 7px; background: #fff; border: 1.5px solid #ede9fe;
+  padding: 7px 14px; border-radius: 100px; font-size: 12.5px; font-weight: 700; color: #1e1b4b;
+  box-shadow: 0 2px 8px rgba(124,58,237,.07);
+}
+.jm-landing .ti-dot {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── HERO VISUAL (old banner classes kept for compat) ── */
+.jm-landing .hero-vis { position: relative; animation: jm-flt 6s ease-in-out infinite; }
+.jm-landing .banner-card {
+  background: linear-gradient(135deg, #7c3aed 0%, #9333ea 45%, #ec4899 100%);
+  border-radius: 28px; padding: 32px; position: relative; overflow: hidden;
+  margin-bottom: 16px; box-shadow: 0 16px 48px rgba(124,58,237,.35);
+}
+.jm-landing .banner-card::before { content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px; border-radius:50%; background:rgba(255,255,255,.08); }
+.jm-landing .banner-card::after { content:''; position:absolute; bottom:-40px; right:60px; width:120px; height:120px; border-radius:50%; background:rgba(255,255,255,.06); }
+.jm-landing .banner-date { font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.65); margin-bottom:8px; }
+.jm-landing .banner-title { font-family:'Nunito',sans-serif; font-size:22px; font-weight:900; color:#fff; margin-bottom:6px; }
+.jm-landing .banner-sub { font-size:13px; color:rgba(255,255,255,.7); font-style:italic; margin-bottom:24px; }
+.jm-landing .banner-stats { display:flex; gap:12px; position:relative; z-index:1; }
+.jm-landing .b-stat { background:rgba(255,255,255,.15); border-radius:12px; padding:12px 16px; flex:1; backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.2); }
+.jm-landing .b-stat-num { font-family:'Nunito',sans-serif; font-size:20px; font-weight:900; color:#fff; }
+.jm-landing .b-stat-lbl { font-size:11px; color:rgba(255,255,255,.65); margin-top:2px; font-weight:600; }
+.jm-landing .metric-row { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+.jm-landing .m-card { background:#fff; border-radius:16px; padding:18px 20px; border:1.5px solid #ede9fe; box-shadow:0 2px 12px rgba(124,58,237,.06); position:relative; overflow:hidden; }
+.jm-landing .m-card::after { content:''; position:absolute; top:0; right:0; width:80px; height:80px; border-radius:0 16px 0 80px; opacity:.06; }
+.jm-landing .m-card:nth-child(1)::after { background:#ec4899; }
+.jm-landing .m-card:nth-child(2)::after { background:#7c3aed; }
+.jm-landing .m-card:nth-child(3)::after { background:#10b981; }
+.jm-landing .m-card:nth-child(4)::after { background:#f59e0b; }
+.jm-landing .m-icon { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:16px; margin-bottom:12px; }
+.jm-landing .m-icon.pink { background:linear-gradient(135deg,rgba(236,72,153,.15),rgba(249,115,22,.1)); }
+.jm-landing .m-icon.purple { background:linear-gradient(135deg,rgba(124,58,237,.15),rgba(79,70,229,.1)); }
+.jm-landing .m-icon.green { background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1)); }
+.jm-landing .m-icon.amber { background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(217,119,6,.1)); }
+.jm-landing .m-num { font-family:'Nunito',sans-serif; font-size:28px; font-weight:900; color:#1e1b4b; line-height:1; margin-bottom:4px; letter-spacing:-1px; }
+.jm-landing .m-label { font-size:13px; font-weight:600; color:#6b7280; }
+.jm-landing .sparkline { margin-top:12px; height:28px; }
+.jm-landing .sparkline svg { width:100%; height:100%; }
+
+/* ── MARQUEE ── */
+.jm-landing .marquee-wrap { background:#fff; border-top:1px solid #ede9fe; border-bottom:1px solid #ede9fe; overflow:hidden; }
+.jm-landing .marquee-inner { display:flex; align-items:center; }
+.jm-landing .marquee-label { flex-shrink:0; padding:14px 24px; background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); color:#fff; font-family:'Nunito',sans-serif; font-size:12px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap; }
+.jm-landing .marquee-track { display:flex; animation:jm-mq 30s linear infinite; width:max-content; }
+.jm-landing .mq-item { display:inline-flex; align-items:center; gap:10px; padding:14px 28px; font-size:13px; font-weight:700; color:#6b7280; white-space:nowrap; border-right:1px solid #ede9fe; }
+.jm-landing .mq-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; background:linear-gradient(135deg,#7c3aed,#ec4899); }
+
+/* ── SECTION UTILITY ── */
+.jm-landing .section { padding:96px 48px; }
+.jm-landing .si { max-width:1200px; margin:0 auto; }
+.jm-landing .sec-label { display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(236,72,153,.08)); border:1.5px solid rgba(124,58,237,.18); padding:5px 14px; border-radius:100px; font-size:11px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#7c3aed; margin-bottom:20px; }
+.jm-landing .sh { font-family:'Nunito',sans-serif; font-size:clamp(32px,4vw,50px); font-weight:900; letter-spacing:-1.5px; color:#1e1b4b; line-height:1.08; }
+.jm-landing .sh .g { background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.jm-landing .sp { font-size:17px; color:#6b7280; line-height:1.68; margin-top:14px; font-weight:500; }
+
+/* ── REVEAL ── */
+.jm-landing .rv { opacity:0; transform:translateY(22px); transition:opacity .6s ease, transform .6s ease; }
+.jm-landing .rv.vis { opacity:1; transform:translateY(0); }
+
+/* ── PROBLEM / SOLUTION ── */
+.jm-landing .ps-bg { background:#fff; }
+.jm-landing .ps-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-top:56px; }
+.jm-landing .ps-col { border-radius:20px; padding:40px; border:2px solid #ede9fe; background:#fff; }
+.jm-landing .ps-col.sol { border-color:rgba(124,58,237,.25); background:linear-gradient(135deg,rgba(124,58,237,.03),rgba(236,72,153,.02)); }
+.jm-landing .ps-badge { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:8px; font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; margin-bottom:20px; }
+.jm-landing .ps-badge.bad { background:#fee2e2; color:#dc2626; }
+.jm-landing .ps-badge.good { background:#ede9fe; color:#7c3aed; }
+.jm-landing .ps-head { font-family:'Nunito',sans-serif; font-size:20px; font-weight:900; color:#1e1b4b; margin-bottom:24px; letter-spacing:-.5px; }
+.jm-landing .ps-li { display:flex; align-items:flex-start; gap:12px; padding:12px 0; border-bottom:1px solid rgba(124,58,237,.07); }
+.jm-landing .ps-li:last-child { border-bottom:none; padding-bottom:0; }
+.jm-landing .ps-ico { width:24px; height:24px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+.jm-landing .ps-ico.x { background:#fee2e2; }
+.jm-landing .ps-ico.ok { background:#ede9fe; }
+.jm-landing .ps-text { font-size:14px; color:#374151; line-height:1.55; font-weight:500; }
+.jm-landing .ps-text strong { color:#1e1b4b; font-weight:700; }
+
+/* ── HOW IT WORKS ── */
+.jm-landing .hiw-bg { background:#f8f7ff; }
+.jm-landing .steps-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-top:56px; }
+.jm-landing .step-card { background:#fff; border-radius:20px; padding:32px 24px; border:2px solid #ede9fe; position:relative; transition:all .25s; cursor:default; }
+.jm-landing .step-card:hover { border-color:rgba(124,58,237,.3); box-shadow:0 12px 36px rgba(124,58,237,.12); transform:translateY(-4px); }
+.jm-landing .step-num-badge { position:absolute; top:-14px; right:20px; background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); color:#fff; font-family:'Nunito',sans-serif; font-size:13px; font-weight:900; padding:4px 12px; border-radius:100px; box-shadow:0 4px 12px rgba(124,58,237,.3); }
+.jm-landing .step-icon { width:54px; height:54px; border-radius:16px; font-size:26px; margin-bottom:18px; background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(236,72,153,.08)); border:1.5px solid rgba(124,58,237,.15); display:flex; align-items:center; justify-content:center; }
+.jm-landing .step-title { font-family:'Nunito',sans-serif; font-size:16px; font-weight:900; color:#1e1b4b; margin-bottom:8px; letter-spacing:-.3px; }
+.jm-landing .step-desc { font-size:13px; color:#6b7280; line-height:1.65; font-weight:500; }
+.jm-landing .hiw-cta { text-align:center; margin-top:44px; }
+.jm-landing .btn-outline-grad { display:inline-flex; align-items:center; gap:8px; padding:13px 24px; border-radius:12px; border:2px solid #7c3aed; color:#7c3aed; background:transparent; font-family:'Nunito',sans-serif; font-size:14px; font-weight:800; cursor:pointer; transition:all .2s; }
+.jm-landing .btn-outline-grad:hover { background:#7c3aed; color:#fff; box-shadow:0 6px 20px rgba(124,58,237,.3); }
+
+/* ── DEMO ── */
+.jm-landing .demo-bg { background:#fff; }
+.jm-landing .demo-list { margin-top:56px; display:flex; flex-direction:column; gap:20px; }
+.jm-landing .d-step { display:grid; grid-template-columns:80px 1fr; border:2px solid #ede9fe; border-radius:20px; overflow:hidden; background:#fff; box-shadow:0 2px 16px rgba(124,58,237,.05); transition:box-shadow .25s; }
+.jm-landing .d-step:hover { box-shadow:0 10px 40px rgba(124,58,237,.1); }
+.jm-landing .d-step-num { background:linear-gradient(180deg,#7c3aed,#ec4899); display:flex; align-items:center; justify-content:center; font-family:'Nunito',sans-serif; font-size:28px; font-weight:900; color:rgba(255,255,255,.35); letter-spacing:-1px; }
+.jm-landing .d-step-num.gr-step4 { background:linear-gradient(180deg,#10b981,#059669); }
+.jm-landing .d-body { padding:32px 36px; }
+.jm-landing .d-title { font-family:'Nunito',sans-serif; font-size:19px; font-weight:900; color:#1e1b4b; margin-bottom:10px; letter-spacing:-.4px; }
+.jm-landing .d-desc { font-size:14px; color:#6b7280; line-height:1.65; margin-bottom:18px; font-weight:500; }
+.jm-landing .d-desc strong { color:#1e1b4b; font-weight:700; }
+.jm-landing .d-ui { background:#f8f7ff; border:2px solid #ede9fe; border-radius:14px; padding:16px 20px; }
+.jm-landing .d-file { display:flex; align-items:center; gap:12px; }
+.jm-landing .d-file-ic { width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,rgba(239,68,68,.15),rgba(239,68,68,.08)); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.jm-landing .d-file-name { font-size:13px; font-weight:700; color:#1e1b4b; }
+.jm-landing .d-file-meta { font-size:12px; color:#6b7280; margin-top:2px; font-weight:500; }
+.jm-landing .d-file-ok { margin-left:auto; display:flex; align-items:center; gap:5px; font-size:12px; font-weight:800; color:#10b981; background:rgba(16,185,129,.1); padding:4px 10px; border-radius:100px; }
+.jm-landing .d-job { display:flex; align-items:flex-start; gap:12px; }
+.jm-landing .d-logo { width:38px; height:38px; border-radius:10px; background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); display:flex; align-items:center; justify-content:center; font-family:'Nunito',sans-serif; font-size:14px; font-weight:900; color:#fff; flex-shrink:0; }
+.jm-landing .d-job-title { font-size:13px; font-weight:700; color:#1e1b4b; }
+.jm-landing .d-job-meta { font-size:12px; color:#6b7280; margin-top:2px; font-weight:500; }
+.jm-landing .d-job-chip { display:inline-flex; margin-top:8px; padding:3px 10px; border-radius:100px; background:#ede9fe; color:#7c3aed; font-size:11px; font-weight:800; }
+.jm-landing .d-steps { display:flex; flex-direction:column; gap:8px; }
+.jm-landing .das { display:flex; align-items:center; gap:10px; padding:9px 14px; background:#fff; border-radius:10px; border:1.5px solid #ede9fe; }
+.jm-landing .das.done svg { color:#10b981; }
+.jm-landing .das.loading svg { color:#7c3aed; animation:jm-spin 1s linear infinite; }
+.jm-landing .das.done span { font-size:13px; font-weight:600; color:#374151; }
+.jm-landing .das.loading span { font-size:13px; font-weight:700; color:#7c3aed; }
+.jm-landing .result-score-card { background:#fff; border:2px solid rgba(124,58,237,.2); border-radius:14px; padding:20px; margin-bottom:12px; }
+.jm-landing .rsc-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.jm-landing .rsc-label { font-size:13px; font-weight:700; color:#1e1b4b; }
+.jm-landing .rsc-score { font-family:'Nunito',sans-serif; font-size:36px; font-weight:900; background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; letter-spacing:-1px; }
+.jm-landing .rsc-bar { height:8px; background:#ede9fe; border-radius:4px; overflow:hidden; }
+.jm-landing .rsc-fill { height:100%; background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); border-radius:4px; width:87%; }
+.jm-landing .rsc-hint { font-size:12px; color:#10b981; margin-top:8px; font-weight:700; }
+.jm-landing .r-items { display:flex; flex-direction:column; gap:8px; }
+.jm-landing .r-item { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border-radius:10px; border:1.5px solid; margin-bottom:0; }
+.jm-landing .r-item.ok { background:rgba(16,185,129,.06); border-color:rgba(16,185,129,.2); }
+.jm-landing .r-item.warn { background:rgba(245,158,11,.06); border-color:rgba(245,158,11,.2); }
+.jm-landing .r-title { font-size:13px; font-weight:700; color:#1e1b4b; margin-bottom:2px; }
+.jm-landing .r-desc { font-size:12px; color:#6b7280; font-weight:500; }
+
+/* ── FEATURES ── */
+.jm-landing .feats-bg { background:#f8f7ff; }
+.jm-landing .feats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:56px; }
+.jm-landing .feat-card { background:#fff; border-radius:20px; padding:36px 30px; border:2px solid #ede9fe; transition:all .25s; position:relative; overflow:hidden; }
+.jm-landing .feat-card:hover { border-color:rgba(124,58,237,.3); box-shadow:0 12px 40px rgba(124,58,237,.1); transform:translateY(-3px); }
+.jm-landing .feat-card::after { content:''; position:absolute; top:0; right:0; width:100px; height:100px; border-radius:0 20px 0 100px; background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); opacity:.04; pointer-events:none; }
+.jm-landing .feat-head { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }
+.jm-landing .feat-icon { width:52px; height:52px; border-radius:14px; background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(236,72,153,.08)); border:1.5px solid rgba(124,58,237,.15); display:flex; align-items:center; justify-content:center; font-size:24px; }
+.jm-landing .feat-chip { font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#a78bfa; border:1.5px solid #ede9fe; padding:4px 9px; border-radius:6px; }
+.jm-landing .feat-title { font-family:'Nunito',sans-serif; font-size:17px; font-weight:900; color:#1e1b4b; margin-bottom:10px; letter-spacing:-.3px; }
+.jm-landing .feat-desc { font-size:14px; color:#6b7280; line-height:1.65; margin-bottom:24px; font-weight:500; }
+.jm-landing .feat-cta { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:800; color:#7c3aed; background:none; border:none; cursor:pointer; padding:0; font-family:'Nunito Sans',sans-serif; transition:gap .2s; }
+.jm-landing .feat-cta:hover { gap:10px; }
+.jm-landing .feat-always { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:#a78bfa; }
+
+/* ── COMPARISON ── */
+.jm-landing .cmp-bg { background:#fff; }
+.jm-landing .cmp-wrap { margin-top:56px; border:2px solid #ede9fe; border-radius:20px; overflow:hidden; box-shadow:0 4px 28px rgba(124,58,237,.07); }
+.jm-landing .cmp-head { display:grid; grid-template-columns:2fr 1.4fr 1.4fr; background:#f8f7ff; border-bottom:2px solid #ede9fe; }
+.jm-landing .cmp-hc { padding:16px 28px; font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:#6b7280; border-right:2px solid #ede9fe; }
+.jm-landing .cmp-hc:last-child { border-right:none; }
+.jm-landing .cmp-hc.hl { background:linear-gradient(135deg,rgba(124,58,237,.08),rgba(236,72,153,.05)); color:#7c3aed; }
+.jm-landing .cmp-row { display:grid; grid-template-columns:2fr 1.4fr 1.4fr; border-bottom:1px solid #ede9fe; transition:background .15s; }
+.jm-landing .cmp-row:last-child { border-bottom:none; }
+.jm-landing .cmp-row:hover { background:rgba(124,58,237,.02); }
+.jm-landing .cmp-c { padding:15px 28px; font-size:14px; color:#374151; border-right:2px solid #ede9fe; display:flex; align-items:center; gap:10px; font-weight:500; }
+.jm-landing .cmp-c:last-child { border-right:none; }
+.jm-landing .cmp-c.fn { font-weight:700; color:#1e1b4b; }
+.jm-landing .cmp-c.hl { background:rgba(124,58,237,.025); color:#7c3aed; font-weight:800; }
+
+/* ── USE CASES ── */
+.jm-landing .uc-bg { background:#f8f7ff; }
+.jm-landing .uc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:20px; margin-top:56px; }
+.jm-landing .uc-card { background:#fff; border:2px solid #ede9fe; border-radius:20px; padding:32px 24px; transition:all .25s; cursor:default; }
+.jm-landing .uc-card:hover { border-color:rgba(124,58,237,.3); box-shadow:0 12px 36px rgba(124,58,237,.12); transform:translateY(-4px); }
+.jm-landing .uc-icon { font-size:32px; display:block; margin-bottom:16px; }
+.jm-landing .uc-title { font-family:'Nunito',sans-serif; font-size:16px; font-weight:900; color:#1e1b4b; margin-bottom:8px; letter-spacing:-.3px; }
+.jm-landing .uc-desc { font-size:13px; color:#6b7280; line-height:1.65; font-weight:500; }
+
+/* ── PRICING ── */
+.jm-landing .price-bg { background:#fff; }
+.jm-landing .price-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; max-width:800px; margin:56px auto 0; }
+.jm-landing .p-card { background:#fff; border:2px solid #ede9fe; border-radius:20px; padding:40px; position:relative; transition:box-shadow .25s; }
+.jm-landing .p-card:hover { box-shadow:0 10px 40px rgba(124,58,237,.1); }
+.jm-landing .p-card.feat { border-color:#7c3aed; background:linear-gradient(135deg,rgba(124,58,237,.03),rgba(236,72,153,.02)); }
+.jm-landing .p-tag { position:absolute; top:-14px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); color:#fff; font-family:'Nunito',sans-serif; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; padding:5px 16px; border-radius:100px; box-shadow:0 4px 14px rgba(124,58,237,.35); }
+.jm-landing .p-plan { font-size:12px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#6b7280; margin-bottom:20px; }
+.jm-landing .p-price { display:flex; align-items:baseline; gap:6px; margin-bottom:8px; }
+.jm-landing .p-amt { font-family:'Nunito',sans-serif; font-size:54px; font-weight:900; color:#1e1b4b; letter-spacing:-2px; line-height:1; }
+.jm-landing .p-per { font-size:14px; color:#6b7280; font-weight:600; }
+.jm-landing .p-desc { font-size:14px; color:#6b7280; margin-bottom:32px; padding-bottom:32px; border-bottom:1.5px solid #ede9fe; font-weight:500; }
+.jm-landing .p-feats { display:flex; flex-direction:column; gap:13px; margin-bottom:36px; list-style:none; padding:0; }
+.jm-landing .p-fi { display:flex; align-items:flex-start; gap:9px; font-size:14px; color:#374151; font-weight:500; }
+.jm-landing .p-fi-ico { width:18px; height:18px; border-radius:50%; flex-shrink:0; background:linear-gradient(135deg,#7c3aed,#ec4899); display:flex; align-items:center; justify-content:center; margin-top:1px; }
+.jm-landing .btn-price { width:100%; padding:14px; border-radius:12px; border:none; font-family:'Nunito',sans-serif; font-size:15px; font-weight:900; cursor:pointer; transition:all .2s; }
+.jm-landing .btn-price.main { background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); color:#fff; box-shadow:0 6px 20px rgba(124,58,237,.3); }
+.jm-landing .btn-price.main:hover { transform:translateY(-1px); box-shadow:0 10px 28px rgba(124,58,237,.4); }
+.jm-landing .btn-price.dis { background:#f8f7ff; color:#6b7280; cursor:not-allowed; border:2px solid #ede9fe; }
+
+/* ── FAQ ── */
+.jm-landing .faq-bg { background:#f8f7ff; }
+.jm-landing .faq-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:56px; }
+.jm-landing .faq-item { background:#fff; border:2px solid #ede9fe; border-radius:16px; padding:24px 28px; transition:all .2s; }
+.jm-landing .faq-item:hover { border-color:rgba(124,58,237,.3); }
+.jm-landing .faq-q { font-family:'Nunito',sans-serif; font-size:15px; font-weight:900; color:#1e1b4b; margin-bottom:10px; letter-spacing:-.2px; }
+.jm-landing .faq-a { font-size:14px; color:#6b7280; line-height:1.68; font-weight:500; }
+
+/* ── NEWSLETTER ── */
+.jm-landing .nl-bg { background:#fff; }
+.jm-landing .nl-box { background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); border-radius:28px; padding:72px; text-align:center; position:relative; overflow:hidden; box-shadow:0 24px 64px rgba(124,58,237,.3); }
+.jm-landing .nl-box::before { content:''; position:absolute; top:-80px; right:-80px; width:300px; height:300px; border-radius:50%; background:rgba(255,255,255,.08); }
+.jm-landing .nl-box::after { content:''; position:absolute; bottom:-60px; left:-60px; width:200px; height:200px; border-radius:50%; background:rgba(255,255,255,.06); }
+.jm-landing .nl-box > * { position:relative; z-index:1; }
+.jm-landing .nl-title { font-family:'Nunito',sans-serif; font-size:38px; font-weight:900; color:#fff; letter-spacing:-1px; margin-bottom:12px; }
+.jm-landing .nl-sub { font-size:16px; color:rgba(255,255,255,.65); margin-bottom:36px; font-weight:600; }
+.jm-landing .nl-form { display:flex; gap:10px; max-width:420px; margin:0 auto 14px; }
+.jm-landing .nl-in { flex:1; padding:14px 18px; background:rgba(255,255,255,.15); border:1.5px solid rgba(255,255,255,.25); border-radius:12px; color:#fff; font-family:'Nunito Sans',sans-serif; font-size:14px; outline:none; transition:border-color .2s; font-weight:500; }
+.jm-landing .nl-in::placeholder { color:rgba(255,255,255,.5); }
+.jm-landing .nl-in:focus { border-color:rgba(255,255,255,.5); }
+.jm-landing .nl-btn { padding:14px 24px; background:#fff; border:none; border-radius:12px; font-family:'Nunito',sans-serif; font-size:14px; font-weight:900; color:#7c3aed; cursor:pointer; transition:all .2s; white-space:nowrap; }
+.jm-landing .nl-btn:hover { background:#1e1b4b; color:#fff; }
+.jm-landing .nl-note { font-size:12px; color:rgba(255,255,255,.4); font-weight:600; }
+
+/* ── FINAL CTA ── */
+.jm-landing .fcta { background:#f8f7ff; padding:96px 48px; text-align:center; }
+.jm-landing .fcta-inner { max-width:680px; margin:0 auto; }
+.jm-landing .fcta-title { font-family:'Nunito',sans-serif; font-size:clamp(38px,5vw,64px); font-weight:900; letter-spacing:-2px; color:#1e1b4b; line-height:1.06; margin-bottom:20px; }
+.jm-landing .fcta-title .g { background:linear-gradient(135deg,#7c3aed 0%,#9333ea 45%,#ec4899 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.jm-landing .fcta-sub { font-size:18px; color:#6b7280; line-height:1.65; margin-bottom:44px; font-weight:500; }
+.jm-landing .fcta-btns { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; margin-bottom:24px; }
+.jm-landing .fcta-note { font-size:13px; color:#a78bfa; font-weight:700; }
+
+/* ── FOOTER ── */
+.jm-landing .jm-footer { background:#1e1b4b; padding:64px 48px 40px; }
+.jm-landing .ft-in { max-width:1200px; margin:0 auto; }
+.jm-landing .ft-top { display:grid; grid-template-columns:1.6fr 1fr 1fr 1fr; gap:64px; margin-bottom:56px; }
+.jm-landing .ft-logo-text { font-family:'Nunito Sans',sans-serif; font-size:14px; color:rgba(255,255,255,.35); line-height:1.7; margin:16px 0 24px; font-weight:500; }
+.jm-landing .ft-socials { display:flex; gap:10px; }
+.jm-landing .ft-soc { width:36px; height:36px; border-radius:10px; border:1px solid rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:rgba(255,255,255,.35); cursor:pointer; transition:all .2s; background:none; }
+.jm-landing .ft-soc:hover { border-color:rgba(255,255,255,.35); color:#fff; background:rgba(255,255,255,.07); }
+.jm-landing .ft-col-h { font-family:'Nunito',sans-serif; font-size:11px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,255,255,.25); margin-bottom:20px; }
+.jm-landing .ft-links { display:flex; flex-direction:column; gap:12px; }
+.jm-landing .ft-link, .jm-landing .ft-link-btn { font-size:14px; color:rgba(255,255,255,.45); text-decoration:none; background:none; border:none; cursor:pointer; text-align:left; font-family:'Nunito Sans',sans-serif; padding:0; transition:color .2s; font-weight:500; }
+.jm-landing .ft-link:hover, .jm-landing .ft-link-btn:hover { color:#fff; }
+.jm-landing .ft-bottom { display:flex; align-items:center; justify-content:space-between; padding-top:32px; border-top:1px solid rgba(255,255,255,.07); font-size:13px; color:rgba(255,255,255,.2); font-weight:500; }
+.jm-landing .ft-bl { display:flex; gap:24px; }
+.jm-landing .ft-bl a { color:rgba(255,255,255,.2); text-decoration:none; transition:color .2s; }
+.jm-landing .ft-bl a:hover { color:rgba(255,255,255,.55); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 1060px) {
+  .jm-landing .hero-inner { grid-template-columns:1fr; }
+  .jm-landing .hero-vis { display:none; }
+  .jm-landing .feats-grid { grid-template-columns:repeat(2,1fr); }
+  .jm-landing .uc-grid { grid-template-columns:repeat(2,1fr); }
+  .jm-landing .ft-top { grid-template-columns:1fr 1fr; gap:40px; }
+}
+@media (max-width: 768px) {
+  .jm-landing .jm-nav { padding:0 20px; }
+  .jm-landing .nav-links, .jm-landing .nav-actions { display:none; }
+  .jm-landing .hamburger { display:flex; }
+  .jm-landing .hero { padding:100px 20px 64px; }
+  .jm-landing .section { padding:64px 20px; }
+  .jm-landing .fcta { padding:64px 20px; }
+  .jm-landing .ps-grid { grid-template-columns:1fr; }
+  .jm-landing .steps-grid { grid-template-columns:repeat(2,1fr); }
+  .jm-landing .feats-grid { grid-template-columns:1fr; }
+  .jm-landing .cmp-head, .jm-landing .cmp-row { grid-template-columns:1.5fr 1fr 1.2fr; }
+  .jm-landing .cmp-hc, .jm-landing .cmp-c { padding:10px 12px; font-size:12px; }
+  .jm-landing .uc-grid { grid-template-columns:1fr; }
+  .jm-landing .price-grid { grid-template-columns:1fr; }
+  .jm-landing .faq-grid { grid-template-columns:1fr; }
+  .jm-landing .nl-box { padding:40px 24px; }
+  .jm-landing .nl-form { flex-direction:column; }
+  .jm-landing .jm-footer { padding:48px 20px 32px; }
+  .jm-landing .ft-top { grid-template-columns:1fr; gap:32px; }
+  .jm-landing .ft-bottom { flex-direction:column; gap:14px; text-align:center; }
+  .jm-landing .d-step { grid-template-columns:56px 1fr; }
+  .jm-landing .d-step-num { font-size:20px; }
+  .jm-landing .d-body { padding:22px 18px; }
+  .jm-landing .banner-stats { flex-wrap:wrap; }
+}
+
+/* ══════════════════════════════════════════
+   HERO VISUAL — Product showcase card
+══════════════════════════════════════════ */
+.jm-landing .hv-root { position:relative; animation:jm-flt 6s ease-in-out infinite; }
+.jm-landing .hv-card { background:#ffffff; border-radius:24px; padding:28px; box-shadow:0 0 0 1px rgba(124,58,237,.1),0 24px 64px rgba(124,58,237,.14),0 8px 24px rgba(0,0,0,.06); position:relative; overflow:hidden; }
+.jm-landing .hv-card::before { content:''; position:absolute; top:-60px; right:-60px; width:200px; height:200px; border-radius:50%; background:linear-gradient(135deg,rgba(124,58,237,.07),rgba(236,72,153,.05)); pointer-events:none; }
+.jm-landing .hv-job-header { display:flex; align-items:center; gap:12px; padding-bottom:20px; border-bottom:1px solid #f3f0ff; margin-bottom:22px; }
+.jm-landing .hv-company-logo { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#4285f4,#34a853); display:flex; align-items:center; justify-content:center; font-family:'Nunito',sans-serif; font-size:18px; font-weight:900; color:#fff; flex-shrink:0; box-shadow:0 4px 12px rgba(66,133,244,.3); }
+.jm-landing .hv-job-info { flex:1; min-width:0; }
+.jm-landing .hv-job-title { font-family:'Nunito',sans-serif; font-size:14px; font-weight:800; color:#1e1b4b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.jm-landing .hv-job-company { font-size:12px; color:#6b7280; margin-top:2px; font-weight:500; }
+.jm-landing .hv-live-badge { display:flex; align-items:center; gap:6px; background:linear-gradient(135deg,rgba(124,58,237,.1),rgba(236,72,153,.08)); border:1px solid rgba(124,58,237,.2); color:#7c3aed; font-size:11px; font-weight:700; padding:5px 10px; border-radius:100px; white-space:nowrap; }
+.jm-landing .hv-live-dot { width:6px; height:6px; border-radius:50%; background:#7c3aed; animation:jm-blink 1.2s ease-in-out infinite; }
+.jm-landing .hv-score-section { display:flex; align-items:center; gap:20px; margin-bottom:20px; }
+.jm-landing .hv-ring-wrap { position:relative; flex-shrink:0; width:120px; height:120px; }
+.jm-landing .hv-ring-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.jm-landing .hv-ring-num { font-family:'Nunito',sans-serif; font-size:28px; font-weight:900; line-height:1; background:linear-gradient(135deg,#7c3aed,#ec4899); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+.jm-landing .hv-ring-pct { font-size:16px; }
+.jm-landing .hv-ring-lbl { font-size:11px; font-weight:700; color:#6b7280; margin-top:2px; }
+.jm-landing .hv-score-details { flex:1; }
+.jm-landing .hv-score-label { font-family:'Nunito',sans-serif; font-size:16px; font-weight:900; color:#1e1b4b; margin-bottom:2px; }
+.jm-landing .hv-score-sub { font-size:12px; color:#10b981; font-weight:600; margin-bottom:12px; }
+.jm-landing .hv-steps-mini { display:flex; flex-direction:column; gap:5px; }
+.jm-landing .hv-step-row { display:flex; align-items:center; gap:7px; opacity:0.3; transition:opacity 0.4s ease; }
+.jm-landing .hv-step-row.done { opacity:1; }
+.jm-landing .hv-step-ico { width:16px; height:16px; border-radius:50%; background:#ede9fe; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.jm-landing .hv-step-row.done .hv-step-ico { background:linear-gradient(135deg,#7c3aed,#ec4899); color:#fff; }
+.jm-landing .hv-step-row.final.done .hv-step-ico { background:linear-gradient(135deg,#10b981,#059669); }
+.jm-landing .hv-step-empty { width:6px; height:6px; border-radius:50%; background:#d1d5db; }
+.jm-landing .hv-step-text { font-size:11px; color:#6b7280; font-weight:500; }
+.jm-landing .hv-step-row.done .hv-step-text { color:#374151; }
+.jm-landing .hv-step-row.final.done .hv-step-text { color:#10b981; font-weight:700; }
+.jm-landing .hv-keywords-section { padding:16px 0; border-top:1px solid #f3f0ff; border-bottom:1px solid #f3f0ff; margin-bottom:14px; }
+.jm-landing .hv-kw-label { font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6b7280; margin-bottom:10px; }
+.jm-landing .hv-kw-chips { display:flex; flex-wrap:wrap; gap:7px; }
+.jm-landing .hv-chip { padding:4px 11px; border-radius:100px; font-size:12px; font-weight:700; font-family:'Nunito',sans-serif; }
+.jm-landing .hv-chip.match { background:rgba(16,185,129,.1); color:#065f46; border:1px solid rgba(16,185,129,.2); }
+.jm-landing .hv-chip.miss { background:rgba(239,68,68,.08); color:#991b1b; border:1px solid rgba(239,68,68,.2); }
+.jm-landing .hv-tip { display:flex; align-items:center; gap:10px; background:linear-gradient(135deg,rgba(245,158,11,.08),rgba(245,158,11,.04)); border:1px solid rgba(245,158,11,.25); border-radius:10px; padding:10px 14px; }
+.jm-landing .hv-tip-icon { font-size:16px; flex-shrink:0; }
+.jm-landing .hv-tip-text { font-size:12px; color:#6b7280; font-weight:500; }
+.jm-landing .hv-tip-text strong { color:#1e1b4b; font-weight:800; }
+.jm-landing .hv-float { position:absolute; background:#fff; border-radius:14px; padding:10px 16px; display:flex; align-items:center; gap:10px; box-shadow:0 8px 32px rgba(0,0,0,.12),0 0 0 1px rgba(124,58,237,.08); pointer-events:none; }
+.jm-landing .hv-float-ats { top:-18px; right:-12px; animation:jm-flt 5s ease-in-out infinite; animation-delay:-1.5s; }
+.jm-landing .hv-float-time { bottom:-18px; left:-12px; animation:jm-flt 5s ease-in-out infinite; animation-delay:-3s; }
+.jm-landing .hv-float-emoji { font-size:20px; flex-shrink:0; }
+.jm-landing .hv-float-title { font-family:'Nunito',sans-serif; font-size:13px; font-weight:900; color:#1e1b4b; }
+.jm-landing .hv-float-sub { font-size:11px; color:#6b7280; font-weight:500; margin-top:1px; }
+
+
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE ADDITIONS — paste these at the bottom of landing.css
+   Only covers gaps not already handled by existing breakpoints
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Hide new hero visual card on mobile (already hides .hero-vis) ── */
+@media (max-width: 1060px) {
+  .jm-landing .hv-root { display: none; }
+}
+
+/* ── Small phone fixes (< 480px) ── */
+@media (max-width: 480px) {
+  .jm-landing .hero { padding: 90px 16px 56px; }
+  .jm-landing .hero-h { font-size: 36px; letter-spacing: -1.5px; }
+  .jm-landing .hero-sub { font-size: 15px; }
+  .jm-landing .btn-hero-p,
+  .jm-landing .btn-hero-s { width: 100%; justify-content: center; }
+  .jm-landing .hero-ctas { flex-direction: column; gap: 10px; }
+  .jm-landing .steps-grid { grid-template-columns: 1fr; }
+  .jm-landing .cmp-wrap { overflow-x: auto; }
+  .jm-landing .cmp-head,
+  .jm-landing .cmp-row { min-width: 480px; }
+  .jm-landing .nl-title { font-size: 28px; }
+  .jm-landing .fcta-title { font-size: 32px; }
+  .jm-landing .fcta-btns { flex-direction: column; }
+  .jm-landing .btn-hero-p,
+  .jm-landing .fcta-btns .btn-hero-s { width: 100%; justify-content: center; }
+  .jm-landing .marquee-label { display: none; }
+  .jm-landing .trust-row { gap: 8px; }
+  .jm-landing .trust-item { font-size: 11px; padding: 6px 10px; }
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE ADDITIONS — paste at the very bottom of landing.css
+═══════════════════════════════════════════════════════════════ */
+
+/* ── Tablet / iPad (≤ 1060px): stack layout ── */
+@media (max-width: 1060px) {
+  .jm-landing .hero {
+    min-height: unset;
+    height: auto;
+    padding: 110px 32px 72px;
+    overflow: hidden;
+  }
+  .jm-landing .hero-inner {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .jm-landing .hv-root {
+    display: block;
+    max-width: 440px;
+    margin: 0 auto;
+    animation: none;
+  }
+  .jm-landing .deco-blob1 { width: 300px; height: 300px; top: -80px; right: -80px; opacity: 0.5; }
+  .jm-landing .deco-blob2 { width: 180px; height: 180px; bottom: -50px; left: -50px; opacity: 0.5; }
+  .jm-landing .deco-blob3 { display: none; }
+}
+
+/* ── Mobile (≤ 768px): full fix ── */
+@media (max-width: 768px) {
+  .jm-landing .hero {
+    padding: 90px 16px 48px;
+    min-height: unset;
+    height: auto;
+    overflow: hidden;
+  }
+  .jm-landing .hero-inner { gap: 28px; }
+
+  /* ── Hero card: stack score ring above steps (not side by side) ── */
+  .jm-landing .hv-root {
+    display: block;
+    max-width: 100%;
+    margin: 0;
+    animation: none;
+  }
+  .jm-landing .hv-card {
+    padding: 18px 16px;
+    border-radius: 18px;
+  }
+
+  /* Stack ring + details vertically */
+  .jm-landing .hv-score-section {
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* Ring centred, smaller */
+  .jm-landing .hv-ring-wrap {
+    width: 100px;
+    height: 100px;
+  }
+  .jm-landing .hv-ring-wrap svg {
+    width: 100px;
+    height: 100px;
+  }
+  .jm-landing .hv-ring-num { font-size: 22px; }
+  .jm-landing .hv-ring-lbl { font-size: 10px; }
+
+  /* Score details full width, text centred */
+  .jm-landing .hv-score-details {
+    width: 100%;
+    text-align: center;
+  }
+  .jm-landing .hv-score-label { font-size: 15px; }
+  .jm-landing .hv-score-sub   { font-size: 11px; }
+
+  /* Steps list — show all, left aligned */
+  .jm-landing .hv-steps-mini {
+    text-align: left;
+    display: inline-block;
+    width: auto;
+  }
+  .jm-landing .hv-step-text { font-size: 11px; }
+
+  /* Keywords — show fully, wrap nicely */
+  .jm-landing .hv-keywords-section { padding: 12px 0; }
+  .jm-landing .hv-kw-label { font-size: 10px; }
+  .jm-landing .hv-kw-chips { gap: 5px; }
+  .jm-landing .hv-chip {
+    font-size: 11px;
+    padding: 3px 9px;
+  }
+
+  /* Tip bar — show fully */
+  .jm-landing .hv-tip {
+    padding: 8px 12px;
+    border-radius: 8px;
+  }
+  .jm-landing .hv-tip-text { font-size: 11px; }
+
+  /* Hide floating badges — too wide for mobile */
+  .jm-landing .hv-float { display: none; }
+
+  /* Job header — compact */
+  .jm-landing .hv-job-title   { font-size: 13px; }
+  .jm-landing .hv-job-company { font-size: 11px; }
+  .jm-landing .hv-live-badge  { font-size: 10px; padding: 4px 8px; }
+
+  /* Blobs */
+  .jm-landing .deco-blob1 { width: 200px; height: 200px; top: -60px; right: -60px; opacity: 0.3; }
+  .jm-landing .deco-blob2 { width: 140px; height: 140px; bottom: -40px; left: -40px; opacity: 0.3; }
+  .jm-landing .deco-blob3 { display: none; }
+}
+
+/* ── Small phones (≤ 480px) ── */
+@media (max-width: 480px) {
+  .jm-landing .hero-h   { font-size: 34px; letter-spacing: -1.5px; }
+  .jm-landing .hero-sub { font-size: 14px; }
+
+  /* Buttons full width stacked */
+  .jm-landing .hero-ctas  { flex-direction: column; gap: 10px; }
+  .jm-landing .btn-hero-p,
+  .jm-landing .btn-hero-s { width: 100%; justify-content: center; }
+
+  /* Trust badges — single row, all 3 fit */
+  .jm-landing .trust-row { gap: 6px; flex-wrap: nowrap; }
+  .jm-landing .trust-item {
+    font-size: 10px;
+    padding: 5px 8px;
+    flex-shrink: 1;
+    white-space: nowrap;
+  }
+
+  /* Card */
+  .jm-landing .hv-ring-wrap,
+  .jm-landing .hv-ring-wrap svg { width: 88px; height: 88px; }
+  .jm-landing .hv-ring-num { font-size: 20px; }
+
+  /* Hide blobs entirely on tiny screens */
+  .jm-landing .deco-blob1,
+  .jm-landing .deco-blob2 { display: none; }
+
+  /* Other sections */
+  .jm-landing .steps-grid { grid-template-columns: 1fr; }
+  .jm-landing .cmp-wrap   { overflow-x: auto; }
+  .jm-landing .cmp-head,
+  .jm-landing .cmp-row    { min-width: 480px; }
+  .jm-landing .nl-title   { font-size: 26px; }
+  .jm-landing .fcta-title { font-size: 30px; }
+  .jm-landing .fcta-btns  { flex-direction: column; }
+  .jm-landing .fcta-btns .btn-hero-s { width: 100%; justify-content: center; }
+  .jm-landing .marquee-label { display: none; }
+}
